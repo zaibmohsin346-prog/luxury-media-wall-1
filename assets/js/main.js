@@ -23,6 +23,7 @@
   const ikEndpoint = (IK.urlEndpoint || '').replace(/\/+$/, '');
   const ikDir = IK.folder ? '/' + String(IK.folder).replace(/^\/+|\/+$/g, '') : '';
   const ikTr = IK.transform || 'q-auto,f-auto';
+  const ikLocalOnly = IK.localOnly || [];
 
   function asset(path) {
     if (!ikEndpoint) return path;
@@ -37,6 +38,9 @@
     const name = local[1];
     const sized = name.match(/^(.+)-(\d+)\.(jpe?g|png)$/i);
     if (sized) {
+      /* Not in the ImageKit library yet - serve the local derivative rather
+         than a CDN URL that would 404. See IMAGEKIT.localOnly. */
+      if (ikLocalOnly.indexOf(sized[1]) > -1) return path;
       return `${ikEndpoint}${ikDir}/${sized[1]}.${sized[3]}?tr=w-${sized[2]},${ikTr}`;
     }
     /* No size suffix — video. Plain CDN delivery with no `tr=` so it does not
@@ -143,30 +147,68 @@
     }
   }
 
-  /* ================================================ 2. HERO VIDEO LOADING */
-  /* Only fetch the hero video where it genuinely improves things: a wide
-     screen, motion allowed, and not on a metered connection.              */
-  function initHeroVideo() {
-    const video = $('#heroVideo');
-    if (!video) return;
+  /* =============================================== 2. HERO IMAGE SEQUENCE */
+  /* The hero plays as a slow cross-fade between full-resolution photographs
+     rather than a video file. Three reasons it is done this way:
+
+       - Resolution. Each frame is the same 1800px master used everywhere
+         else on the site, so the hero is genuinely sharp on a retina phone.
+         A video would have to be re-encoded per breakpoint to match it.
+       - Reach. Autoplaying video is blocked or throttled on plenty of
+         phones and on Low Power Mode. An image cross-fade always runs.
+       - Weight. Four photographs stream in progressively; only the first
+         one blocks the largest paint.
+
+     Slide 1 is already in the markup. The rest are appended after the first
+     frame has painted, so they never compete with the LCP image.          */
+  function initHeroSlides() {
+    const media = $('#heroMedia');
+    if (!media || typeof HERO_SLIDES === 'undefined') return;
+
+    const first = media.querySelector('.hero__slide');
+    if (!first) return;
 
     const conn = navigator.connection || {};
     const cheap = conn.saveData === true || /2g/.test(conn.effectiveType || '');
-    const wide = window.matchMedia('(min-width: 1024px)').matches;
 
-    if (REDUCED || cheap || !wide) return;
+    /* One photograph, a still hero by request, reduced motion, or a metered
+       connection: leave the single frame exactly as the markup shipped it. */
+    if (HERO_SLIDES.length < 2 || REDUCED || cheap) return;
 
-    const source = document.createElement('source');
-    source.src = asset(video.dataset.src);
-    source.type = 'video/mp4';
-    video.appendChild(source);
-    video.load();
+    const rest = HERO_SLIDES.slice(1);
+    const slides = [first];
 
-    video.addEventListener('canplay', () => {
-      video.classList.add('is-ready');
-      const p = video.play();
-      if (p && p.catch) p.catch(() => video.classList.remove('is-ready'));
-    }, { once: true });
+    rest.forEach((slide) => {
+      const img = new Image();
+      img.className = 'hero__slide';
+      img.src = asset(slide.img + '-1400.jpg');
+      img.srcset = srcset(slide.img) + `, ${asset(slide.img + '-1800.jpg')} 1800w`;
+      img.sizes = '100vw';
+      img.decoding = 'async';
+      img.loading = 'lazy';
+      img.alt = '';                 /* decorative: slide 1 carries the description */
+      img.setAttribute('aria-hidden', 'true');
+      media.appendChild(img);
+      slides.push(img);
+    });
+
+    /* Enables the cross-fade transition only once the first frame is settled,
+       so the opening image appears instantly instead of fading up. */
+    requestAnimationFrame(() => media.classList.add('is-playing'));
+
+    let i = 0;
+    const hold = (typeof HERO_SLIDE_SECONDS === 'number' ? HERO_SLIDE_SECONDS : 6) * 1000;
+
+    const advance = () => {
+      slides[i].classList.remove('is-active');
+      i = (i + 1) % slides.length;
+      slides[i].classList.add('is-active');
+    };
+
+    /* The check lives inside the tick rather than in a visibilitychange
+       handler that tears the timer down: a page that first paints while
+       hidden would otherwise clear its only timer and never rebuild it. */
+    setInterval(() => { if (!document.hidden) advance(); }, hold);
   }
 
   /* ====================================================== 3. RENDER: HERO */
@@ -190,44 +232,6 @@
     if (year) year.textContent = new Date().getFullYear();
   }
 
-  /* ================================================== 4. RENDER: PROJECTS */
-  function renderProjects() {
-    const grid = $('#projectsGrid');
-    if (!grid) return;
-
-    grid.innerHTML = PROJECTS.map((p, i) => `
-      <button type="button" class="project-card" data-project="${i}"
-              data-reveal style="--reveal-delay:${(i % 3) * 90}ms"
-              aria-label="View project ${p.n}: ${esc(p.title)}">
-        <span class="project-card__media">
-          <img src="${asset(p.img + `-480.jpg`)}"
-               srcset="${srcsetCard(p.img)}"
-               sizes="${CARD_SIZES}"
-               width="1792" height="2400"
-               loading="lazy" decoding="async"
-               alt="${esc(p.alt)}">
-          <span class="project-card__veil"></span>
-          <span class="project-card__num">${p.n} <i>/</i> 09</span>
-          <span class="project-card__body">
-            <span class="project-card__title">${esc(p.title)}</span>
-            <span class="project-card__line"></span>
-            <span class="project-card__reveal"><span>
-              <span class="project-card__desc">${esc(p.short)}</span>
-              <span class="tags">${p.tags.map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</span>
-              <span class="project-card__cta">View Project
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-              </span>
-            </span></span>
-          </span>
-        </span>
-      </button>
-    `).join('');
-
-    grid.addEventListener('click', (e) => {
-      const card = e.target.closest('[data-project]');
-      if (card) openModal(Number(card.dataset.project));
-    });
-  }
 
   /* ===================================================== 5. PROJECT MODAL */
   let lastFocused = null;
@@ -505,35 +509,6 @@
     });
   }
 
-  /* ================================================== 7. RENDER: SERVICES */
-  function renderServices() {
-    const grid = $('#servicesGrid');
-    if (!grid) return;
-
-    grid.innerHTML = SERVICES.map((s, i) => `
-      <article class="svc-card${s.flagship ? ' svc-card--flagship' : ''}"
-               data-reveal style="--reveal-delay:${(i % 3) * 90}ms">
-        <div class="svc-card__media">
-          <img src="${asset(s.img + '-900.jpg')}"
-               srcset="${srcsetCard(s.img)}"
-               sizes="${CARD_SIZES}"
-               style="object-position:${s.focus || '50% 50%'}"
-               loading="lazy" decoding="async" alt="${esc(s.alt || s.title)}">
-        </div>
-        <div class="svc-card__body">
-          <span class="svc-card__label">${esc(s.label || '')}</span>
-          <h3>${esc(s.title)}</h3>
-          <p>${esc(s.text)}</p>
-          <a class="svc-card__cta" href="${waLink(
-            `Hello Media Wall Studio, I would like to enquire about ${s.title}. Could you tell me more?`
-          )}" target="_blank" rel="noopener">
-            ${esc(s.cta || 'Enquire')}
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-          </a>
-        </div>
-      </article>
-    `).join('');
-  }
 
   /* =================================================== 8. RENDER: PROCESS */
   function renderProcess() {
@@ -549,35 +524,91 @@
     `).join('');
   }
 
-  /* ================================================= 9. RENDER: MATERIALS */
-  function renderMaterials() {
-    const grid = $('#materialsGrid');
-    if (!grid) return;
-    grid.innerHTML = MATERIALS.map((m, i) => `
-      <article class="mat" tabindex="0" data-reveal style="--reveal-delay:${(i % 5) * 70}ms;
-               background-image:url('${asset(m.src)}'); background-position:${m.pos}; background-size:${m.size};"
-               aria-label="${esc(m.name)}. ${esc(m.desc)} Typical application: ${esc(m.use)}.">
-        <div class="mat__inner">
-          <h3 class="mat__name">${esc(m.name)}</h3>
-          <div class="mat__meta"><div>
-            <p class="mat__desc">${esc(m.desc)}</p>
-            <span class="mat__use">${esc(m.use)}</span>
-          </div></div>
-        </div>
-      </article>
-    `).join('');
+  /* ============================================== 10. RENDER: WALL GUIDE */
+  /* Wall types we have not photographed on site yet are rendered through
+     ImageKit's AI edit. The edit is the FIRST step of the chain and every
+     srcset width is resized from that one result:
+
+         ?tr=w-1400,e-edit-prompt-<prompt>:w-900
+                    \__ generated once, cached __/  \__ plain resize __/
+
+     Running the prompt separately per width would generate a different room
+     for each entry in the srcset, and the picture would change as the
+     browser switched sources. */
+  function editedUrl(base, prompt, width) {
+    if (!ikEndpoint) return `assets/img/${base}-${width}.jpg`;   /* local fallback */
+    return `${ikEndpoint}${ikDir}/${base}.jpg` +
+           `?tr=w-1400,e-edit-prompt-${encodeURIComponent(prompt)}:w-${width},${ikTr}`;
   }
 
-  /* =========================================== 10. RENDER: DETAIL GALLERY */
-  function renderDetails() {
-    const grid = $('#detailsGrid');
-    if (!grid) return;
-    grid.innerHTML = DETAILS.map((d, i) => `
-      <div class="masonry__item masonry__item--${d.shape}" data-caption="${esc(d.caption)}"
-           data-reveal="scale" style="--reveal-delay:${(i % 4) * 80}ms;
-           background-image:url('${asset(d.src)}'); background-position:${d.pos}; background-size:${d.size};"
-           role="img" aria-label="${esc(d.caption)} — close-up detail"></div>
-    `).join('');
+  function guideSources(item) {
+    if (item.edit) {
+      const { base, prompt } = item.edit;
+      return {
+        src: editedUrl(base, prompt, 900),
+        srcset: [480, 900, 1400].map((w) => `${editedUrl(base, prompt, w)} ${w}w`).join(', ')
+      };
+    }
+    return { src: asset(item.img + '-900.jpg'), srcset: srcset(item.img) };
+  }
+
+  function renderWallGuide() {
+    const grid = $('#wallGuide');
+    if (!grid || typeof WALL_GUIDE === 'undefined') return;
+
+    grid.innerHTML = WALL_GUIDE.map((g, i) => {
+      const s = guideSources(g);
+      return `
+      <article class="guide__item" data-reveal style="--reveal-delay:${(i % 2) * 90}ms">
+        <div class="guide__media">
+          <img src="${s.src}" srcset="${s.srcset}"
+               sizes="(max-width: 720px) 92vw, (max-width: 1100px) 46vw, 620px"
+               loading="lazy" decoding="async" alt="${esc(g.alt || g.title)}">
+        </div>
+        <div class="guide__body">
+          <h3 class="guide__title">${esc(g.title)}</h3>
+          <p class="guide__text" id="guideText${i}">${esc(g.text)}</p>
+          <button class="guide__more" type="button" aria-expanded="false" aria-controls="guideText${i}">
+            <span>Read more</span>
+          </button>
+          <a class="guide__cta" href="${waLink(
+            `Hello Media Wall Studio, I am interested in a ${g.title}. Could you advise on my room?`
+          )}" target="_blank" rel="noopener">
+            Ask about this wall
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </a>
+        </div>
+      </article>`;
+    }).join('');
+
+    /* Delegated so it survives a re-render, and harmless on desktop where
+       the button is display:none and can never be clicked. */
+    grid.addEventListener('click', (e) => {
+      const btn = e.target.closest('.guide__more');
+      if (!btn) return;
+      const item = btn.closest('.guide__item');
+      const open = item.classList.toggle('is-open');
+      btn.setAttribute('aria-expanded', String(open));
+      btn.querySelector('span').textContent = open ? 'Show less' : 'Read more';
+    });
+
+    /* Eight wall types ran 4,483px on a phone - a fifth of the whole page,
+       and the single biggest reason the scroll felt endless. Three are shown
+       and the rest are one tap away. Desktop lays them two-across and shows
+       every one, where the button is display:none. */
+    if (WALL_GUIDE.length <= 3) return;
+    const all = document.createElement('button');
+    all.type = 'button';
+    all.className = 'guide__all';
+    all.setAttribute('aria-controls', 'wallGuide');
+    all.setAttribute('aria-expanded', 'false');
+    all.textContent = `Show all ${WALL_GUIDE.length} wall types`;
+    all.addEventListener('click', () => {
+      const open = grid.classList.toggle('is-expanded');
+      all.setAttribute('aria-expanded', String(open));
+      all.textContent = open ? 'Show fewer' : `Show all ${WALL_GUIDE.length} wall types`;
+    });
+    grid.insertAdjacentElement('afterend', all);
   }
 
   /* ============================================== 11. RENDER: TESTIMONIALS */
@@ -585,7 +616,7 @@
     const grid = $('#quotesGrid');
     if (!grid) return;
     grid.innerHTML = TESTIMONIALS.map((q, i) => `
-      <figure class="quote" data-reveal style="--reveal-delay:${i * 110}ms">
+      <figure class="quote" data-reveal style="--reveal-delay:${(i % 3) * 110}ms">
         <span class="quote__mark" aria-hidden="true">&ldquo;</span>
         <div class="quote__stars" aria-label="Five out of five stars">${ICONS.star.repeat(5)}</div>
         <blockquote><p>${esc(q.text)}</p></blockquote>
@@ -594,6 +625,24 @@
         </figcaption>
       </figure>
     `).join('');
+
+    /* Nine reviews stacked in a single mobile column would undo the page
+       length work, so phones get the first three and a button for the rest.
+       Desktop lays them out three-across and shows every one, where the
+       button is display:none and unreachable. */
+    if (TESTIMONIALS.length <= 3) return;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'quotes__more';
+    btn.setAttribute('aria-controls', 'quotesGrid');
+    btn.setAttribute('aria-expanded', 'false');
+    btn.textContent = `Read all ${TESTIMONIALS.length} reviews`;
+    btn.addEventListener('click', () => {
+      const open = grid.classList.toggle('is-expanded');
+      btn.setAttribute('aria-expanded', String(open));
+      btn.textContent = open ? 'Show fewer reviews' : `Read all ${TESTIMONIALS.length} reviews`;
+    });
+    grid.insertAdjacentElement('afterend', btn);
   }
 
   /* =============================================== 12. WALL CONFIGURATOR */
@@ -903,6 +952,400 @@
     host.setAttribute('data-reveal', 'fade');
   }
 
+  /* =============================================== 18b. SERVICES COVERFLOW */
+  /* A continuous-position coverflow: unlike the featured carousel, this one
+     is not snapped to slots. Position is a fractional card index, a drag
+     moves it by a fraction of a card, and a flick carries.
+
+     Transforms are written straight to the DOM every frame. Nothing about
+     the intermediate numbers belongs in a re-render. */
+  function initCoverFlow(cfg) {
+    const frame   = $(cfg.frame);
+    const ring    = $(cfg.ring);
+    const caption = $(cfg.caption);
+    const dotsBox = $(cfg.dots);
+    const items   = cfg.items;
+    if (!frame || !items || !items.length) return;
+
+    const count = items.length;
+
+    /* Geometry. Card width drives pitch, depth and perspective, so it is the
+       only thing measured. */
+    const ROTATE = 44;      /* degrees the first neighbour tilts */
+    const DEPTH = 0.6;      /* how far it recedes, as a fraction of card width */
+    const FALLOFF = 0.56;   /* below 1, the rake eases off as cards travel out */
+    const FADE = 0.1;       /* opacity lost per step from the centre */
+    const GAP = 0.05;       /* space between cards, as a fraction of width */
+
+    let pos = 0;            /* fractional card index at the centre */
+    let target = 0;         /* where the current settle is headed */
+    let width = 0;
+    let raf = null;
+    let drag = null;
+    let selected = 0;
+
+    /* The caller owns what a card and a caption look like; everything below
+       this point is the ring maths, which is identical for both carousels. */
+    ring.innerHTML = items.map((item, i) => `
+      <div class="cflow__card" role="group" aria-roledescription="slide"
+           aria-label="${i + 1} of ${count}">${cfg.card(item, i)}</div>
+    `).join('');
+
+    dotsBox.innerHTML = items.map((item, i) =>
+      `<button type="button" class="cflow__dot" data-go="${i}"
+               aria-label="Show ${esc(cfg.dotLabel(item))}"></button>`
+    ).join('');
+
+    const cards = $$('.cflow__card', ring);
+    const dots = $$('.cflow__dot', dotsBox);
+
+    const indexAt = (p) => ((Math.round(p) % count) + count) % count;
+
+    function paint() {
+      if (!width) return;
+      const pitch = width * (1 + GAP);
+
+      cards.forEach((card, i) => {
+        /* Fold the distance into the shorter way round the ring. This is the
+           entire looping mechanism - no cloned nodes, no DOM shuffling. */
+        let offset = i - pos;
+        offset = ((offset % count) + count) % count;
+        if (offset > count / 2) offset -= count;
+
+        const distance = Math.abs(offset);
+        /* Tilt and recession both ease off with distance: doubling the
+           distance adds only about half again as much of each. A linear ramp
+           folds the second card shut; this keeps it readable. */
+        const ramp = Math.pow(distance, FALLOFF);
+        /* Capped short of edge-on so a far card never turns its back. */
+        const tilt = Math.min(ROTATE * ramp, 82) * Math.sign(offset);
+
+        card.style.transform =
+          `translateX(calc(-50% + ${offset * pitch}px)) ` +
+          `translateZ(${-DEPTH * width * ramp}px) rotateY(${-tilt}deg)`;
+
+        /* A card is teleported across the ring at exactly half a turn out, so
+           it has to have faded by then or the jump is visible. */
+        const edge = Math.min(1, Math.max(0, count / 2 - distance));
+        card.style.opacity = String(Math.max(0, 1 - FADE * distance) * edge);
+        card.style.zIndex = String(100 - Math.round(distance));
+      });
+    }
+
+    function renderCaption() {
+      caption.innerHTML = cfg.caption_(items[selected], selected);
+      dots.forEach((d, i) => d.setAttribute('aria-current', String(i === selected)));
+    }
+
+    function select(i) {
+      if (i === selected) return;
+      selected = i;
+      renderCaption();
+    }
+
+    function settle(to) {
+      if (raf !== null) cancelAnimationFrame(raf);
+      target = to;
+      select(indexAt(to));
+
+      if (REDUCED) { pos = to; paint(); raf = null; return; }
+
+      const step = () => {
+        const remaining = target - pos;
+        if (Math.abs(remaining) < 0.0004) { pos = target; paint(); raf = null; return; }
+        /* Exponential ease-out rather than a spring: no overshoot wanted. */
+        pos += remaining * 0.16;
+        paint();
+        raf = requestAnimationFrame(step);
+      };
+      raf = requestAnimationFrame(step);
+    }
+
+    /* Take the shorter way round rather than unwinding the whole ring. */
+    const goTo = (i) => settle(i + Math.round((target - i) / count) * count);
+    const nudge = (by) => settle(Math.round(target) + by);
+
+    /* ---- drag ---------------------------------------------------------- */
+    frame.addEventListener('pointerdown', (e) => {
+      if (raf !== null) { cancelAnimationFrame(raf); raf = null; }
+      frame.setPointerCapture(e.pointerId);
+      target = pos;
+      drag = { id: e.pointerId, x: e.clientX, pos: pos, v: 0, t: performance.now() };
+    });
+
+    frame.addEventListener('pointermove', (e) => {
+      if (!drag || drag.id !== e.pointerId) return;
+      const pitch = width * (1 + GAP);
+      if (!pitch) return;
+      const now = performance.now();
+      const previous = pos;
+      pos = drag.pos - (e.clientX - drag.x) / pitch;
+      /* Cards per second, for the throw. */
+      drag.v = ((pos - previous) / Math.max(now - drag.t, 1)) * 1000;
+      drag.t = now;
+      select(indexAt(pos));
+      paint();
+    });
+
+    const endDrag = (e) => {
+      if (!drag || drag.id !== e.pointerId) return;
+      const v = drag.v;
+      drag = null;
+      /* Let a flick carry, but never more than two cards. */
+      const carried = Math.max(-2, Math.min(2, v * 0.18));
+      settle(Math.round(pos + carried));
+    };
+    frame.addEventListener('pointerup', endDrag);
+    frame.addEventListener('pointercancel', endDrag);
+
+    frame.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowLeft') { e.preventDefault(); nudge(-1); }
+      if (e.key === 'ArrowRight') { e.preventDefault(); nudge(1); }
+    });
+
+    $(cfg.prev).addEventListener('click', () => nudge(-1));
+    $(cfg.next).addEventListener('click', () => nudge(1));
+    dotsBox.addEventListener('click', (e) => {
+      const dot = e.target.closest('[data-go]');
+      if (dot) goTo(Number(dot.dataset.go));
+    });
+
+    /* ---- measure -------------------------------------------------------- */
+    const measure = () => {
+      const w = cards[0] && cards[0].offsetWidth;
+      if (!w) return;
+      width = w;
+      paint();
+    };
+    measure();
+    if ('ResizeObserver' in window) new ResizeObserver(measure).observe(frame);
+    else window.addEventListener('resize', measure);
+
+    renderCaption();
+  }
+
+  /* --- the two carousels that ride on it -------------------------------- */
+  function initServicesFlow() {
+    if (typeof SERVICES === 'undefined') return;
+    initCoverFlow({
+      frame: '#servicesFrame', ring: '#servicesRing',
+      caption: '#servicesCaption', dots: '#servicesDots',
+      prev: '#servicesPrev', next: '#servicesNext',
+      items: SERVICES,
+      dotLabel: (s) => s.title,
+      card: (s) => `
+        <img src="${asset(s.img + '-900.jpg')}" srcset="${srcset(s.img)}"
+             sizes="(max-width: 720px) 68vw, 360px"
+             style="object-position:${s.focus || '50% 50%'}"
+             draggable="false" loading="lazy" decoding="async" alt="${esc(s.alt || s.title)}">`,
+      caption_: (s) => `
+        <span class="cflow__label">${esc(s.label || '')}</span>
+        <span class="cflow__title">${esc(s.title)}</span>
+        <p class="cflow__text">${esc(s.text)}</p>
+        <a class="cflow__cta" href="${waLink(
+          `Hello Media Wall Studio, I would like to enquire about ${s.title}.`
+        )}" target="_blank" rel="noopener">${esc(s.cta || 'Enquire')}
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </a>`
+    });
+  }
+
+  function initMaterialsFlow() {
+    if (typeof MATERIALS === 'undefined') return;
+    initCoverFlow({
+      frame: '#materialsFrame', ring: '#materialsRing',
+      caption: '#materialsCaption', dots: '#materialsDots',
+      prev: '#materialsPrev', next: '#materialsNext',
+      items: MATERIALS,
+      dotLabel: (m) => m.name,
+      /* Materials are close crops of real joinery rather than whole rooms,
+         so each card is a positioned, zoomed background the way the old
+         swatch grid was - an <img> would show the entire room instead of
+         the grain. */
+      card: (m) => `
+        <span class="cflow__swatch" role="img" aria-label="${esc(m.name)}"
+              style="background-image:url('${asset(m.src)}');
+                     background-position:${m.pos}; background-size:${m.size};"></span>`,
+      caption_: (m) => `
+        <span class="cflow__label">${esc(m.use)}</span>
+        <span class="cflow__title">${esc(m.name)}</span>
+        <p class="cflow__text">${esc(m.desc)}</p>
+        <a class="cflow__cta" href="${waLink(
+          `Hello Media Wall Studio, I am interested in a media wall in ${m.name}.`
+        )}" target="_blank" rel="noopener">Enquire about ${esc(m.name)}
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </a>`
+    });
+  }
+
+  /* ======================================================= 19. COVERFLOW */
+  /* Featured-work carousel. The centre card opens the same project modal
+     the grid uses, so a project's detail lives in exactly one place.
+
+     Slot assignment is the whole trick: rather than moving cards, each one
+     is told which of five slots it currently occupies and CSS animates the
+     difference. Wrapping the offset means the strip is a true loop with no
+     jump at the seam. */
+  function initCoverflow() {
+    const stage = $('#coverflowStage');
+    const dotsBox = $('#coverflowDots');
+    if (!stage || typeof PROJECTS === 'undefined' || !PROJECTS.length) return;
+
+    const total = PROJECTS.length;
+    let index = 0;
+    let timer = null;
+
+    stage.innerHTML = PROJECTS.map((p, i) => `
+      <button type="button" class="coverflow__card" data-slide="${i}" data-pos="off"
+              aria-label="Project ${p.n}: ${esc(p.title)}">
+        <!-- The full 480/900/1400 set, not srcsetCard: this is a large
+             feature card, not a thumbnail, and the centre one is also
+             scaled up by the 3D transform. Capping at 900w left a retina
+             phone rendering a 440px card from a 900px file. -->
+        <img src="${asset(p.img + '-900.jpg')}" srcset="${srcset(p.img)}"
+             sizes="(max-width: 640px) 90vw, 560px"
+             loading="lazy" decoding="async" alt="${esc(p.alt)}">
+        <span class="coverflow__veil"></span>
+        <span class="coverflow__num">${p.n} <i>/</i> 0${total}</span>
+        <span class="coverflow__body">
+          <span class="coverflow__title">${esc(p.title)}</span>
+          <span class="coverflow__rule"></span>
+          <span class="coverflow__desc">${esc(p.short)}</span>
+          <span class="coverflow__cta">View Project
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7-7 7m7-7H3"/></svg>
+          </span>
+        </span>
+      </button>
+    `).join('');
+
+    dotsBox.innerHTML = PROJECTS.map((p, i) =>
+      `<button type="button" class="coverflow__dot" data-go="${i}"
+               aria-label="Show project ${p.n}"></button>`
+    ).join('');
+
+    const cards = $$('.coverflow__card', stage);
+    const dots = $$('.coverflow__dot', dotsBox);
+
+    function paint() {
+      cards.forEach((card, i) => {
+        /* Distance from the centre, wrapped so index 0 sits next to the
+           last card rather than the whole strip sliding back. */
+        let d = (i - index + total) % total;
+        if (d > total / 2) d -= total;
+
+        const pos = d === 0 ? 'c'
+                  : d === 1 ? 'r1' : d === 2 ? 'r2'
+                  : d === -1 ? 'l1' : d === -2 ? 'l2'
+                  : 'off';
+        card.dataset.pos = pos;
+        /* Only the front card is a tab stop; the others are reachable by
+           the arrows and dots, which are labelled. */
+        card.tabIndex = pos === 'c' ? 0 : -1;
+        card.setAttribute('aria-hidden', pos === 'off' ? 'true' : 'false');
+      });
+      dots.forEach((d, i) => d.setAttribute('aria-current', String(i === index)));
+    }
+
+    const go = (i) => { index = (i + total) % total; paint(); };
+    const next = () => go(index + 1);
+    const prev = () => go(index - 1);
+
+    /* Autoplay restarts on every interaction, so a deliberate move is never
+       cut short by a tick that was already queued. */
+    const stop = () => { if (timer) { clearInterval(timer); timer = null; } };
+    const play = () => {
+      stop();
+      if (REDUCED) return;
+      timer = setInterval(() => { if (!document.hidden) next(); }, 5000);
+    };
+    const nudge = (fn) => { fn(); play(); };
+
+    stage.addEventListener('click', (e) => {
+      const card = e.target.closest('.coverflow__card');
+      if (!card) return;
+      const i = Number(card.dataset.slide);
+      /* A side card steps into the middle; the middle one opens up. */
+      if (i === index) openModal(i);
+      else nudge(() => go(i));
+    });
+
+    dotsBox.addEventListener('click', (e) => {
+      const dot = e.target.closest('[data-go]');
+      if (dot) nudge(() => go(Number(dot.dataset.go)));
+    });
+
+    $('#coverflowNext').addEventListener('click', () => nudge(next));
+    $('#coverflowPrev').addEventListener('click', () => nudge(prev));
+
+    /* Hover pause is a pointer affordance only - a finger that brushed the
+       strip while scrolling would otherwise stop it for good. */
+    if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
+      stage.addEventListener('mouseenter', stop);
+      stage.addEventListener('mouseleave', play);
+    }
+
+    /* Arrow keys, but only while the carousel is actually on screen, so
+       they do not hijack the rest of the page. */
+    let inView = false;
+    if ('IntersectionObserver' in window) {
+      new IntersectionObserver((entries) => {
+        inView = entries[0].isIntersecting;
+      }, { threshold: 0.35 }).observe(stage);
+    }
+    document.addEventListener('keydown', (e) => {
+      if (!inView || modalOpen) return;
+      if (e.key === 'ArrowLeft') nudge(prev);
+      if (e.key === 'ArrowRight') nudge(next);
+    });
+
+    /* Swipe. The vertical guard keeps a diagonal scroll from being read as
+       a horizontal flick. */
+    let sx = 0, sy = 0;
+    stage.addEventListener('touchstart', (e) => {
+      sx = e.touches[0].clientX; sy = e.touches[0].clientY;
+    }, { passive: true });
+    stage.addEventListener('touchend', (e) => {
+      const dx = e.changedTouches[0].clientX - sx;
+      const dy = e.changedTouches[0].clientY - sy;
+      if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy)) nudge(() => (dx < 0 ? next() : prev()));
+    }, { passive: true });
+
+    paint();
+    play();
+  }
+
+  /* ======================================================== 20. SHOWCASE */
+  /* Deals every photograph into the drifting corridor behind the studio
+     statement. Each card runs the same animation; spacing them evenly by
+     animation-delay across one cycle is what turns twelve independent
+     loops into a single continuous stream.
+
+     A NEGATIVE delay is the important part: it starts each card partway
+     through its path rather than making the reader wait for the queue to
+     fill, so the corridor is already populated on the first frame. */
+  function renderShowcase() {
+    const inner = $('#showcaseInner');
+    if (!inner || typeof SHOWCASE === 'undefined' || !SHOWCASE.length) return;
+
+    /* Reduced motion: the CSS hides the stage, so building twelve image
+       elements that will never be seen is wasted bandwidth. */
+    if (REDUCED) return;
+
+    const dur = (typeof SHOWCASE_SECONDS === 'number' ? SHOWCASE_SECONDS : 22);
+    const step = dur / SHOWCASE.length;
+    inner.style.setProperty('--showcase-dur', dur + 's');
+
+    inner.innerHTML = SHOWCASE.map((s, i) => `
+      <div class="showcase__card"
+           style="animation-name:${i % 2 ? 'showcaseL' : 'showcaseR'};
+                  animation-delay:-${(i * step).toFixed(2)}s">
+        <img src="${asset(s.img + '-480.jpg')}"
+             srcset="${srcsetCard(s.img)}" sizes="20vw"
+             loading="lazy" decoding="async" alt="${esc(s.alt || '')}">
+      </div>
+    `).join('');
+  }
+
   /* ========================================================= 19. MARQUEE */
   function initMarquee() {
     const track = $('#marqueeTrack');
@@ -915,22 +1358,23 @@
   function boot() {
     rewriteStaticMedia();
     renderContactBits();
-    renderProjects();
     renderTransforms();
-    renderServices();
+    initServicesFlow();
     renderProcess();
-    renderMaterials();
-    renderDetails();
+    initMaterialsFlow();
+    renderWallGuide();
     renderQuotes();
     renderSignature();
 
     initHeader();
-    initHeroVideo();
+    initHeroSlides();
     initModal();
     initShare();
     initConfigurator();
     initVideo();
     initForm();
+    initCoverflow();
+    renderShowcase();
     initMarquee();
     initFloat();
 

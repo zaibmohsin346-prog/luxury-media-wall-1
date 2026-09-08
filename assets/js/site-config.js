@@ -54,7 +54,16 @@ const waLink = (message) =>
 const IMAGEKIT = {
   urlEndpoint: 'https://ik.imagekit.io/ojutq4xhq',
   folder:      'media-wall',  // set to '' if you upload to the root folder
-  transform:   'q-auto,f-auto'
+  transform:   'q-auto,f-auto',
+
+  /* Photographs that live only in assets/img and have NOT been uploaded to
+     the ImageKit library yet. Without this they would be rewritten to a CDN
+     URL that does not exist and the card would come back empty.
+
+     A new photo therefore works the moment it is dropped in. Upload it to
+     ImageKit later, delete its name from this list, and it moves to the CDN
+     with no other change. */
+  localOnly: ['service-bathroom', 'service-kitchen-dubai']
 };
 
 /* ------------------------------------------------------------------ MEDIA */
@@ -63,6 +72,67 @@ const MEDIA = {
   heroVideo:  'assets/video/media-wall-reel.mp4',
   reelVideo:  'assets/video/media-wall-reel.mp4' // "Watch the transformation" section
 };
+
+/* ----------------------------------------------------------- HERO SLIDES */
+/* The hero plays as a slow cinematic sequence: each photograph cross-fades
+   into the next while drifting gently, so the opening frame has motion on
+   every device - phones included - at full photographic resolution.
+
+   The first entry is the poster above; it is preloaded in the <head> and is
+   the page's largest paint, so it must stay first. The rest are fetched
+   only after the first frame has painted.
+
+   Add, remove or reorder freely. One entry alone = a single still hero. */
+const HERO_SLIDES = [
+  {
+    img: 'assets/img/hero-poster',
+    alt: 'Luxury penthouse living room in Dubai with a backlit onyx media wall and walnut cabinetry'
+  },
+  {
+    img: 'assets/img/project-01-marble-halo',
+    alt: 'Book-matched marble media wall with a recessed LED halo and floating oak console'
+  },
+  {
+    img: 'assets/img/project-07-fireplace',
+    alt: 'Marble media wall with a linear fireplace below the television and lit display shelving'
+  },
+  {
+    img: 'assets/img/project-03-dark-luxury',
+    alt: 'Dark charcoal media wall with brass inlay detailing in a modern Dubai apartment'
+  }
+];
+
+/* Seconds each hero photograph holds before it fades into the next. */
+const HERO_SLIDE_SECONDS = 6;
+
+/* ------------------------------------------------------------- SHOWCASE */
+/* The drifting photograph corridor behind the studio statement. Cards are
+   dealt alternately to the left and right lane and travel from far behind
+   the page toward the reader, so the whole portfolio passes through the
+   section one photograph at a time.
+
+   Order matters: neighbours in this list appear on opposite sides at the
+   same moment, so alternating stone and timber keeps the pairing varied.
+
+   The three `before-*` photographs are deliberately left out - they are
+   plain undecorated walls, and the point of this section is finished work. */
+const SHOWCASE = [
+  { img: 'assets/img/project-01-marble-halo',       alt: 'Book-matched marble media wall with a recessed LED halo' },
+  { img: 'assets/img/project-02-warm-oak',          alt: 'Warm oak media wall with a floating cabinet run' },
+  { img: 'assets/img/project-08-backlit-onyx',      alt: 'Backlit onyx media wall' },
+  { img: 'assets/img/project-04-fluted-travertine', alt: 'Fluted travertine media wall' },
+  { img: 'assets/img/project-03-dark-luxury',       alt: 'Dark charcoal media wall with brass inlay' },
+  { img: 'assets/img/project-05-full-height',       alt: 'Full-height panelled television wall' },
+  { img: 'assets/img/project-07-fireplace',         alt: 'Marble media wall with a linear fireplace' },
+  { img: 'assets/img/project-06-minimal-light',     alt: 'Minimal light media wall with concealed cabling' },
+  { img: 'assets/img/hero-poster',                  alt: 'Penthouse living room with a backlit onyx media wall' },
+  { img: 'assets/img/service-wardrobe',             alt: 'Bespoke fitted wardrobe joinery' },
+  { img: 'assets/img/project-09-uae-penthouse',     alt: 'UAE penthouse media wall above the Dubai skyline' },
+  { img: 'assets/img/service-kitchen',              alt: 'Bespoke kitchen joinery' }
+];
+
+/* One full pass from the far distance to the foreground, in seconds. */
+const SHOWCASE_SECONDS = 22;
 
 /* --------------------------------------------------------------- PROJECTS */
 /* Nine separate projects, nine separate photographs. */
@@ -298,10 +368,19 @@ const SERVICES = [
     icon: 'unit',
     label: 'Kitchen Scope',
     title: 'Kitchen Renovations',
-    text: 'Cabinetry, counters, storage, lighting, surfaces and the practical upgrade details, planned around the kitchen you already have.',
-    img: 'assets/img/service-kitchen', focus: '50% 45%',
+    text: 'Handleless cabinetry, book-matched stone islands and splashbacks, integrated appliances and the concealed lighting that makes a working kitchen feel like part of the living room.',
+    img: 'assets/img/service-kitchen-dubai', focus: '50% 50%',
     cta: 'View kitchen service',
-    alt: 'Modern kitchen with a marble island, light oak cabinetry and pendant lighting'
+    alt: 'Open-plan Dubai kitchen with a book-matched Calacatta marble island, taupe handleless cabinetry and a Burj Al Arab view'
+  },
+  {
+    icon: 'stone',
+    label: 'Bathroom Scope',
+    title: 'Bathroom Renovations',
+    text: 'Large-format stone, floating vanities, backlit mirrors and walk-in showers - set out so the tile joints, the drainage falls and the niche heights all line up before anything is cut.',
+    img: 'assets/img/service-bathroom', focus: '50% 50%',
+    cta: 'View bathroom service',
+    alt: 'Luxury Dubai bathroom with a floating dark marble vanity, backlit mirrors, walk-in shower and a Burj Khalifa view'
   },
   {
     icon: 'storage',
@@ -380,6 +459,9 @@ const MATERIALS = [
 /* ------------------------------------------------- DETAIL GALLERY (CROPS) */
 /* Close-up framings of the same craftsmanship, deliberately cropped tight
    so they read as detail shots rather than repeats of the project cards. */
+/* NOT CURRENTLY RENDERED. The close-up masonry gallery this fed was replaced
+   by the WALL_GUIDE section below. Kept, with its CSS in sections.css, so the
+   gallery can be restored as its own section without rebuilding it. */
 const DETAILS = [
   { caption: 'Marble veining',      src: 'assets/img/project-01-marble-halo-900.jpg',       pos: '62% 20%', size: '280%', shape: 'tall' },
   { caption: 'LED halo detail',     src: 'assets/img/project-01-marble-halo-900.jpg',       pos: '38% 44%', size: '250%', shape: 'wide' },
@@ -436,10 +518,142 @@ const TESTIMONIALS = [
   {
     text: 'Our old TV corner was a mess of cables. Now there is not a single wire visible and we have storage we actually use. Worth every dirham.',
     by: 'Apartment Owner', meta: 'Business Bay · Full-Height TV Wall'
+  },
+  {
+    text: 'We were nervous about the fireplace sitting under the screen, but they set out the whole elevation first and showed us the clearances on paper. It has been running all winter without an issue.',
+    by: 'Family Home', meta: 'Arabian Ranches · Fireplace Media Wall'
+  },
+  {
+    text: 'The site team arrived when they said they would and left the apartment clean every evening. That sounds like a small thing until you have lived through a fit-out that did not.',
+    by: 'Penthouse Owner', meta: 'Dubai Marina · Backlit Onyx Wall'
+  },
+  {
+    text: 'Our living room is narrow so we were worried a full wall unit would close it in. The floating design kept the floor clear and the room genuinely feels bigger than before.',
+    by: 'Apartment Owner', meta: 'JVC · Floating TV Unit'
+  },
+  {
+    text: 'They talked us out of the finish we originally asked for and showed us samples under our own evening lighting instead. They were right, and we appreciated being told.',
+    by: 'Villa Owner', meta: 'Jumeirah · Venetian Plaster Wall'
+  },
+  {
+    text: 'Two years on there is no movement in any of the joints and the doors still close the way they did on handover. That is the part you only find out about later.',
+    by: 'Townhouse Owner', meta: 'Town Square · Wooden Media Wall'
   }
 ];
 
 /* Enquiry form — media wall types offered in the dropdown */
+/* --------------------------------------------------------- WALL GUIDE */
+/* The long-form section: one media wall type per entry, each with the
+   photograph and the practical specification notes that go with it.
+
+   Two ways to point at a picture:
+     img  - a local base path, same convention as everywhere else
+     edit - { base, prompt } renders `base` through ImageKit's AI edit for
+            wall types we have not photographed on site yet. The edit runs
+            once and is cached; every width is resized from that single
+            result, so all three srcset entries show the same room.
+   Swap an `edit` entry for an `img` one the moment real photography of
+   that wall type exists.                                                 */
+const WALL_GUIDE = [
+  {
+    title: 'Marble-Effect Statement Media Wall',
+    img: 'assets/img/project-01-marble-halo',
+    alt: 'Book-matched marble media wall with a recessed LED halo behind the television',
+    text: 'Large-format porcelain gives you the look of a marble slab without the weight, the ' +
+          'price or the sealing routine natural stone needs in a humid climate. Book-match the ' +
+          'veining across the centre panel and keep the television slightly proud of the surface ' +
+          'so the pattern reads around it rather than being cut in half. The wall wants to be at ' +
+          'least three metres wide for a full-height joint to look deliberate; below that, a ' +
+          'framed central panel usually sits better than a slab that has been squeezed to fit.'
+  },
+  {
+    title: 'Slatted Wood Media Wall',
+    img: 'assets/img/project-02-warm-oak',
+    alt: 'Warm oak slatted media wall with concealed lighting and a floating cabinet run',
+    text: 'Timber slats warm up rooms that are otherwise hard surfaces - porcelain floors, big ' +
+          'glazing, painted plaster - and they take the echo out of an open-plan living area at ' +
+          'the same time. Real veneer beats printed board here, because the grain has to change ' +
+          'across the run or the wall reads as wallpaper at close range. Hold a consistent 10 to ' +
+          '12 mm shadow gap between slats: once lighting is grazing down the wall, any drift in ' +
+          'that spacing is the first thing the eye catches.'
+  },
+  {
+    title: 'Dark and Moody Media Wall',
+    img: 'assets/img/project-03-dark-luxury',
+    alt: 'Charcoal media wall with brass inlay detailing and warm concealed lighting',
+    text: 'A pale room with a pale television wall can feel oddly unfinished, because the largest ' +
+          'object in it has no visual weight. Smoked oak, charcoal lacquer and bronze glass fix ' +
+          'that without extra ornament. The trap is lighting: keep concealed strips at 3000K and ' +
+          'on a dimmer, since cool white on dark timber turns it grey and flat. Contrast is what ' +
+          'makes this scheme work - a dark wall against warm floors and soft furnishings, not a ' +
+          'dark wall in a dark room.'
+  },
+  {
+    title: 'Minimalist Floating Media Wall',
+    img: 'assets/img/project-06-minimal-light',
+    alt: 'Minimal light media wall with a floating cabinet run and fully concealed cabling',
+    text: 'The right answer when floor area is tight and the client still wants everything put ' +
+          'away. A floating cabinet run keeps the floor line unbroken, which makes a small ' +
+          'sitting room read as larger. It only works if the build has somewhere for the ' +
+          'services to go: allow at least 100 mm of internal void behind the screen for brackets, ' +
+          'sockets and cable routing. Matte lacquer suits this style better than gloss - less ' +
+          'reflected glare during the day, and fingerprints do not show on every door.'
+  },
+  {
+    title: 'Fireplace Media Wall',
+    img: 'assets/img/project-07-fireplace',
+    alt: 'Marble media wall with a linear electric fireplace set below the television',
+    text: 'Where a room already wants a central focus, the fire and the screen should be designed ' +
+          'as one composition rather than two features sharing a wall. Line up the television ' +
+          'width, the fire opening and the cabinet breaks so the whole elevation runs on one set ' +
+          'of proportions - a 1.2 m linear fire sits comfortably under a 65-inch screen. Even ' +
+          'with an electric unit, take the clearance above the fire from the manufacturer\'s data ' +
+          'sheet rather than from the drawing, and design the gap around it.'
+  },
+  {
+    title: 'Fish Tank Media Wall',
+    edit: {
+      base: 'project-06-minimal-light',
+      prompt: 'replace the open shelving with a large built-in aquarium full of water and fish'
+    },
+    alt: 'Media wall with a large built-in aquarium integrated into the joinery beside the television',
+    text: 'A striking wall, but a technical one: it has to be designed around servicing from day ' +
+          'one. The tank needs reachable access for filtration, electrics and cleaning, so the ' +
+          'joinery should include a maintenance cupboard or a removable panel rather than sealing ' +
+          'the aquarium into a display box. Moisture-resistant board, aluminium vent grilles and ' +
+          'low-voltage lighting are the sensible specification, because condensation here is a ' +
+          'real engineering consideration and not a styling note.'
+  },
+  {
+    title: 'Hidden Door Media Wall',
+    edit: {
+      base: 'project-05-full-height',
+      prompt: 'add a tall flush hidden door in the panelled wall beside the television'
+    },
+    alt: 'Full-height panelled media wall with a concealed flush door built into the composition',
+    text: 'Sometimes there is a store room, a utility space or a second doorway behind the feature ' +
+          'wall that the design should not advertise. A concealed door solves it: full-height ' +
+          'panelling, a scribed leaf and a consistent 3 mm perimeter gap, so the opening ' +
+          'disappears into the rhythm of the wall. Decide the hinge early - it drives everything ' +
+          'else. The wrong concealed hinge changes the swing clearance and can push the adjacent ' +
+          'shelving out of alignment with the rest of the run.'
+  },
+  {
+    title: 'Venetian Plaster Media Wall',
+    edit: {
+      base: 'project-09-uae-penthouse',
+      prompt: 'make the wall finish warm venetian plaster'
+    },
+    alt: 'Media wall finished in warm polished Venetian plaster with soft concealed lighting',
+    text: 'Some rooms do not need another timber or stone feature - they need texture. Venetian ' +
+          'plaster carries enough movement on its own that the joinery can stay quiet, which ' +
+          'suits schemes with limited shelving. Ask for sample boards and look at them twice: ' +
+          'the same plaster can read almost flat in daylight and far more clouded under 2700K in ' +
+          'the evening, and that shift is the entire point of choosing it. The depth comes from ' +
+          'the surface, not from complicated joinery.'
+  }
+];
+
 const WALL_TYPES = [
   'Marble Media Wall',
   'Wooden Media Wall',

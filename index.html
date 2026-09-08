@@ -33,7 +33,7 @@
 <!-- Fonts -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400;0,6..96,500;0,6..96,600;1,6..96,400&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet">
 
 <!-- Scroll-reveal styles are scoped to .js, so every section stays visible
      if scripting is unavailable or a script fails to load. -->
@@ -147,13 +147,15 @@
 
 <!-- ======================================================== HERO ======= -->
 <section class="hero" id="home">
-  <div class="hero__media">
-    <img src="https://ik.imagekit.io/ojutq4xhq/media-wall/hero-poster.jpg?tr=w-1800,q-auto,f-auto"
+  <!-- Slide 1 is the page's largest paint and is preloaded in the <head>, so
+       it ships in the markup. Slides 2+ come from HERO_SLIDES and are added
+       by main.js only after this one has painted. -->
+  <div class="hero__media" id="heroMedia">
+    <img class="hero__slide is-active"
+         src="https://ik.imagekit.io/ojutq4xhq/media-wall/hero-poster.jpg?tr=w-1800,q-auto,f-auto"
          srcset="https://ik.imagekit.io/ojutq4xhq/media-wall/hero-poster.jpg?tr=w-900,q-auto,f-auto 900w, https://ik.imagekit.io/ojutq4xhq/media-wall/hero-poster.jpg?tr=w-1400,q-auto,f-auto 1400w, https://ik.imagekit.io/ojutq4xhq/media-wall/hero-poster.jpg?tr=w-1800,q-auto,f-auto 1800w"
          sizes="100vw" width="1792" height="2400" fetchpriority="high" decoding="async"
          alt="Luxury penthouse living room in Dubai with a backlit onyx media wall and walnut cabinetry">
-    <video class="hero__video" id="heroVideo" data-src="assets/video/media-wall-reel.mp4"
-           muted loop playsinline preload="none" aria-hidden="true" tabindex="-1"></video>
   </div>
   <div class="hero__scrim"></div>
 
@@ -204,25 +206,34 @@
   </div>
 </div>
 
+<!-- ==================================================== SHOWCASE ======= -->
+<!-- A purely visual band: the portfolio drifts past one photograph at a
+     time, with nothing set over it. Cards are dealt from SHOWCASE in
+     site-config.js by main.js; the band carries its own height because its
+     contents are all absolutely positioned. -->
+<div class="showcase" aria-hidden="true">
+  <div class="showcase__stage">
+    <div class="showcase__inner" id="showcaseInner"></div>
+  </div>
+  <div class="showcase__scrim"></div>
+</div>
+
 <!-- ======================================================= ABOUT ======= -->
 <section class="section" id="about">
   <div class="shell intro">
     <div>
       <p class="eyebrow" data-reveal>Bespoke Interior Design</p>
       <h2 class="h1 mt-6 reveal-words" data-reveal="fade">Where function meets architecture</h2>
-      <div class="intro__stats" data-reveal>
-        <div><b>9</b><span>Signature Projects</span></div>
-        <div><b>6</b><span>Step Design Process</span></div>
-        <div><b>10</b><span>Material Families</span></div>
-        <div><b>1</b><span>Wall, Built For You</span></div>
-      </div>
     </div>
     <div>
       <p class="lede" data-reveal>
         A media wall is the one surface everybody in the room looks at. We treat it the way an
         architect treats a facade — proportion first, then material, then light.
       </p>
-      <p class="lede mt-6" data-reveal style="--reveal-delay:90ms">
+      <!-- Supporting detail. Hidden on phones (see sections.css) so the first
+           photographs are reached sooner; the same material is covered again
+           in Services and in each project's own specification. -->
+      <p class="lede lede--detail mt-6" data-reveal style="--reveal-delay:90ms">
         Media Wall Studio designs and builds bespoke television walls for villas, penthouses and
         apartments across the UAE. Every scheme starts with a site survey and a set of drawings,
         and ends with a wall where the joints line up, the lighting is balanced and not a single
@@ -239,26 +250,37 @@
   </div>
 </section>
 
-<!-- ==================================================== PROJECTS ======= -->
-<section class="section bg-white" id="projects">
+<!-- ==================================================== FEATURED ======= -->
+<!-- Coverflow carousel. Cards are dealt from PROJECTS by main.js; the centre
+     card opens the same project modal the grid below uses, so there is one
+     source of project detail rather than two. -->
+<!-- Carries id="projects": this is now the only projects section, so the
+     nav, the hero button, the footer and the sitemap all still resolve. -->
+<section class="section coverflow" id="projects">
   <div class="shell">
-    <div class="section-head section-head--split">
-      <div>
-        <p class="eyebrow" data-reveal>Selected Work</p>
-        <h2 class="h1 mt-6 reveal-words" data-reveal="fade">Our media wall projects</h2>
-      </div>
-      <div class="section-head__aside">
-        <p class="lede" data-reveal>
-          Nine completed walls, nine different material stories. Open any project to see the
-          full specification — stone, joinery, lighting and the details you cannot photograph.
-        </p>
-      </div>
+    <div class="section-head">
+      <p class="eyebrow eyebrow--center text-center" data-reveal>Selected Work</p>
+      <h2 class="h1 text-center reveal-words" data-reveal="fade">Our media wall projects</h2>
+      <p class="lede text-center coverflow__lede" data-reveal>
+        Nine completed walls, nine different material stories. Drag or tap through them,
+        then open any one for the full specification — stone, joinery, lighting and the
+        details you cannot photograph.
+      </p>
     </div>
 
-    <p class="count-rule mb-10" data-reveal>Projects 01 — 09</p>
-
-    <div class="projects__grid" id="projectsGrid">
+    <div class="coverflow__stage" id="coverflowStage" role="group"
+         aria-roledescription="carousel" aria-label="Featured media wall projects">
       <!-- rendered from PROJECTS in site-config.js -->
+    </div>
+
+    <div class="coverflow__controls">
+      <button type="button" class="coverflow__arrow" id="coverflowPrev" aria-label="Previous project">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+      </button>
+      <div class="coverflow__dots" id="coverflowDots"></div>
+      <button type="button" class="coverflow__arrow" id="coverflowNext" aria-label="Next project">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+      </button>
     </div>
   </div>
 </section>
@@ -301,8 +323,24 @@
       </div>
     </div>
 
-    <div class="svc__grid" id="servicesGrid">
-      <!-- rendered from SERVICES in site-config.js -->
+    <!-- Drag-driven coverflow. Position is continuous rather than snapped to
+         slots, so a drag tracks the finger and a flick carries. Cards are
+         dealt from SERVICES in site-config.js by main.js. -->
+    <div class="cflow" id="servicesFlow" role="region"
+         aria-roledescription="carousel" aria-label="Services">
+      <div class="cflow__frame" id="servicesFrame" tabindex="0">
+        <div class="cflow__ring" id="servicesRing"></div>
+      </div>
+
+      <button type="button" class="cflow__arrow cflow__arrow--prev" id="servicesPrev" aria-label="Previous service">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+      </button>
+      <button type="button" class="cflow__arrow cflow__arrow--next" id="servicesNext" aria-label="Next service">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+      </button>
+
+      <div class="cflow__caption" id="servicesCaption" aria-live="polite"></div>
+      <div class="cflow__dots" id="servicesDots"></div>
     </div>
   </div>
 </section>
@@ -368,7 +406,7 @@
 </section>
 
 <!-- ===================================================== PROCESS ======= -->
-<section class="section on-dark grain">
+<section class="section bg-white">
   <div class="shell relative z-10">
     <div class="section-head section-head--split">
       <div>
@@ -477,8 +515,22 @@
       </div>
     </div>
 
-    <div class="materials__grid" id="materialsGrid">
-      <!-- rendered from MATERIALS in site-config.js -->
+    <!-- Same drag coverflow as Services, dealt from MATERIALS. -->
+    <div class="cflow" id="materialsFlow" role="region"
+         aria-roledescription="carousel" aria-label="Materials">
+      <div class="cflow__frame" id="materialsFrame" tabindex="0">
+        <div class="cflow__ring" id="materialsRing"></div>
+      </div>
+
+      <button type="button" class="cflow__arrow cflow__arrow--prev" id="materialsPrev" aria-label="Previous material">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+      </button>
+      <button type="button" class="cflow__arrow cflow__arrow--next" id="materialsNext" aria-label="Next material">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+      </button>
+
+      <div class="cflow__caption" id="materialsCaption" aria-live="polite"></div>
+      <div class="cflow__dots" id="materialsDots"></div>
     </div>
   </div>
 </section>
@@ -488,25 +540,25 @@
   <div class="shell">
     <div class="section-head section-head--split">
       <div>
-        <p class="eyebrow" data-reveal>Close Up</p>
-        <h2 class="h1 mt-6 reveal-words" data-reveal="fade">Details matter</h2>
+        <p class="eyebrow" data-reveal>The Options</p>
+        <h2 class="h1 mt-6 reveal-words" data-reveal="fade">Types of media wall</h2>
       </div>
       <div class="section-head__aside">
         <p class="lede" data-reveal>
-          Veining, shadow gaps, cable routes, the underside of a floating cabinet.
-          The parts of the job nobody notices when they are done properly.
+          Eight approaches we build most often, and the practical notes that decide
+          which one suits a room - what each finish asks for, and where each one goes wrong.
         </p>
       </div>
     </div>
 
-    <div class="masonry" id="detailsGrid">
-      <!-- rendered from DETAILS in site-config.js -->
+    <div class="guide" id="wallGuide">
+      <!-- rendered from WALL_GUIDE in site-config.js -->
     </div>
   </div>
 </section>
 
 <!-- ======================================================= VIDEO ======= -->
-<section class="section on-dark video-band">
+<section class="section bg-white video-band">
   <div class="shell">
     <div class="section-head section-head--split">
       <div>

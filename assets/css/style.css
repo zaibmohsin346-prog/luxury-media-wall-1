@@ -10,12 +10,22 @@
 
 /* ============================ 01. TOKENS ================================= */
 :root {
-  /* Brand */
-  --charcoal:      #171717;
-  --ink:           #111111;
+  /* Brand
+     Neutrals carry a little warmth rather than being pure greys: a true
+     #111 reads cold and digital next to photography this warm. */
+  --charcoal:      #1A1714;
+  --ink:           #12100D;
   --taupe:         #8A8176;
-  --champagne:     #C6A66B;
-  --champagne-dim: #A98C55;
+
+  /* The accent was #C6A66B - a pale, yellowish cream that went washy on the
+     dark panels and, at 2.0:1, was genuinely hard to read on the light
+     ones. Deeper and a touch more saturated: it reads as brass rather than
+     beige, and holds its own against both grounds. */
+  --champagne:     #BE9553;
+  /* The light-ground variant. Dark enough to clear 4.5:1 on ivory, which
+     the old #A98C55 did not - eyebrows and small caps were failing. */
+  --champagne-dim: #856A33;
+
   --ivory:         #F5F2EC;
   --white:         #FFFFFF;
 
@@ -24,18 +34,34 @@
   --line:          rgba(23, 23, 23, .12);
   --line-soft:     rgba(23, 23, 23, .07);
   --line-dark:     rgba(255, 255, 255, .12);
-  --muted:         #6E6A63;
-  --muted-dark:    rgba(245, 242, 236, .62);
+  /* Was #6E6A63, which cleared AA by a hair at 4.86:1. Darker, so body copy
+     on ivory sits closer to 7:1 and reads properly on a phone outdoors. */
+  --muted:         #5C574E;
+  --muted-dark:    rgba(245, 242, 236, .68);
 
-  /* Type */
-  --font-serif: "Playfair Display", "Times New Roman", Georgia, serif;
-  --font-sans:  "Inter", "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  /* Type
+     Bodoni Moda replaces Playfair Display: a true didone, with the sharp
+     thick-to-thin contrast fashion houses set their mastheads in. It is
+     built for exactly the sizes this page uses. Playfair paired with Inter
+     is also the single most common combination on the web, which is part of
+     why the page read as a template.
+
+     Jost replaces Inter: a geometric sans in the Futura line - the lettering
+     architecture and interiors studios have used for a century. Against a
+     didone it behaves like a gallery caption under a masthead. */
+  --font-serif: "Bodoni Moda", "Didot", "Playfair Display", Georgia, "Times New Roman", serif;
+  --font-sans:  "Jost", "Futura", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 
   /* Rhythm */
   --shell:        1320px;
   --shell-narrow: 980px;
   --gutter:       clamp(1.25rem, 4vw, 3.5rem);
-  --section-y:    clamp(5rem, 11vw, 10.5rem);
+  /* Was clamp(5rem, 11vw, 10.5rem), which put 208px of empty space between
+     every one of fifteen sections at tablet width and 316px on a desktop -
+     roughly 3,000px of the page was nothing at all. Still generous enough
+     to separate one section from the next, without the reader having to
+     scroll through a blank screen to find the next thing. */
+  --section-y:    clamp(2.6rem, 5vw, 5.5rem);
 
   /* Motion */
   --ease:      cubic-bezier(.22, 1, .36, 1);
@@ -371,26 +397,44 @@ h1, h2, h3, h4 {
 .hero__media img, .hero__media video {
   width: 100%; height: 100%; object-fit: cover; object-position: 50% 46%;
 }
-.hero__media img { animation: heroDrift 26s ease-in-out infinite alternate; }
 @keyframes heroDrift {
   from { transform: scale(1.04) translate3d(0, 0, 0); }
   to   { transform: scale(1.13) translate3d(0, -1.6%, 0); }
 }
-.hero__video { position: absolute; inset: 0; opacity: 0; transition: opacity 1.4s var(--ease-soft); }
-.hero__video.is-ready { opacity: 1; }
+
+/* Cinematic hero sequence. Every slide is stacked in the same box; only the
+   active one is opaque, and only the active one drifts, so an off-screen
+   slide costs nothing to composite. The first slide carries no transition
+   on load, otherwise the largest paint would fade in from nothing. */
+.hero__slide {
+  position: absolute; inset: 0;
+  opacity: 0; transition: opacity 1.6s var(--ease-soft);
+  will-change: opacity;
+}
+.hero__slide.is-active { opacity: 1; animation: heroDrift 26s ease-in-out infinite alternate; }
+.hero__media:not(.is-playing) .hero__slide.is-active { transition: none; }
 
 .hero__scrim {
   position: absolute; inset: 0; z-index: 1;
-  /* Weighted so the headline band always clears the brightest photography.
-     The top-right stays open enough to read the room behind it. */
+  /* Shaped, not flooded. The previous version ran 94% black at the foot and
+     88% a quarter of the way up, with a 66% wash down the left on top of
+     that - the room behind it was effectively gone, and the hero read as a
+     dark rectangle rather than as photography.
+
+     Now the density sits only where type sits: a band under the copy, a
+     soft column down the left so the headline has a ground, and a light
+     lift at the very top for the header. The right two thirds of the frame
+     stay open, which is where the wall itself is. */
   background:
     linear-gradient(to top,
-      rgba(9,9,9,.94) 0%,
-      rgba(9,9,9,.88) 24%,
-      rgba(9,9,9,.66) 46%,
-      rgba(9,9,9,.34) 68%,
-      rgba(9,9,9,.52) 100%),
-    linear-gradient(to right, rgba(9,9,9,.66) 0%, rgba(9,9,9,.16) 58%, rgba(9,9,9,.34) 100%);
+      rgba(9,9,9,.88) 0%,
+      rgba(9,9,9,.60) 20%,
+      rgba(9,9,9,.24) 44%,
+      rgba(9,9,9,.04) 68%,
+      rgba(9,9,9,.30) 100%),
+    linear-gradient(to right,
+      rgba(9,9,9,.56) 0%, rgba(9,9,9,.20) 40%,
+      rgba(9,9,9,0) 68%);
 }
 
 .hero__inner {
@@ -406,8 +450,12 @@ h1, h2, h3, h4 {
 .hero__place::before { content: ""; width: 46px; height: 1px; background: currentColor; opacity: .6; }
 
 .hero h1 {
-  color: var(--white); max-width: 17ch;
-  text-shadow: 0 2px 40px rgba(0,0,0,.55);
+  color: var(--white); max-width: 15ch;
+  letter-spacing: -.015em;
+  /* Two shadows rather than one: a tight one that keeps the letterforms
+     crisp against a busy photograph, and a wide soft one that lifts the
+     whole block off the wall behind it without greying the image. */
+  text-shadow: 0 1px 3px rgba(0,0,0,.4), 0 6px 46px rgba(0,0,0,.5);
 }
 .hero h1 .line { display: block; overflow: hidden; }
 .hero h1 .line > span { display: block; transform: translateY(105%); animation: lineUp 1.15s var(--ease) forwards; }
@@ -417,8 +465,9 @@ h1, h2, h3, h4 {
 @keyframes lineUp { to { transform: translateY(0); } }
 
 .hero__sub {
-  margin-top: 1.8rem; max-width: 52ch;
-  color: rgba(255,255,255,.8); font-size: clamp(.97rem, 1.2vw, 1.1rem); line-height: 1.75;
+  margin-top: 1.7rem; max-width: 46ch;
+  color: rgba(255,255,255,.86); font-size: clamp(.97rem, 1.2vw, 1.08rem); line-height: 1.75;
+  text-shadow: 0 1px 18px rgba(0,0,0,.55);
 }
 .hero__actions { margin-top: 2.4rem; display: flex; flex-wrap: wrap; gap: 1rem; }
 
@@ -448,24 +497,39 @@ h1, h2, h3, h4 {
 }
 
 /* Hero stat strip */
+/* Reads as a bar laid over the photograph rather than a black block cut out
+   of it: a hairline, a light frosting, and the room still visible through. */
 .hero__strip {
   position: relative; z-index: 3;
-  border-top: 1px solid rgba(255,255,255,.13);
+  border-top: 1px solid rgba(255,255,255,.16);
   display: grid; grid-template-columns: repeat(4, 1fr);
+  background: rgba(9,9,9,.3);
+  -webkit-backdrop-filter: blur(14px) saturate(1.1);
+          backdrop-filter: blur(14px) saturate(1.1);
 }
-.hero__strip div { padding: 1.5rem 1.2rem; border-right: 1px solid rgba(255,255,255,.13); }
+.hero__strip div {
+  position: relative;
+  padding: clamp(1.3rem, 2.2vh, 1.75rem) clamp(1rem, 2vw, 1.6rem);
+  border-right: 1px solid rgba(255,255,255,.13);
+}
 .hero__strip div:last-child { border-right: 0; }
+/* A champagne tick above each figure - the one place the accent appears in
+   the hero besides the eyebrow, so it ties the two ends together. */
+.hero__strip div::before {
+  content: ""; position: absolute; top: -1px; left: 0; width: 26px; height: 1px;
+  background: var(--champagne); opacity: .85;
+}
 .hero__strip b {
   display: block; font-weight: 400; line-height: 1;
-  font-family: var(--font-serif); font-size: clamp(1.3rem, 2.3vw, 1.9rem); color: var(--white);
+  font-family: var(--font-serif); font-size: clamp(1.35rem, 2.3vw, 2rem); color: var(--white);
 }
 .hero__strip span {
-  display: block; margin-top: .5rem;
-  font-size: .6rem; letter-spacing: .21em; text-transform: uppercase; color: rgba(255,255,255,.54);
+  display: block; margin-top: .55rem;
+  font-size: .595rem; letter-spacing: .22em; text-transform: uppercase; color: rgba(255,255,255,.62);
 }
 
 /* ====================== 08. SECTION FURNITURE =========================== */
-.section-head { display: grid; gap: 1.35rem; margin-bottom: clamp(2.8rem, 5.5vw, 4.6rem); }
+.section-head { display: grid; gap: 1.1rem; margin-bottom: clamp(1.6rem, 3vw, 2.9rem); }
 .section-head--split {
   grid-template-columns: minmax(0, 1.08fr) minmax(0, .92fr);
   gap: clamp(2rem, 5vw, 5rem); align-items: end;
@@ -482,37 +546,41 @@ h1, h2, h3, h4 {
 
 /* ============================ 22. FOOTER ================================ */
 .footer { background: var(--ink); color: var(--ivory); position: relative; }
+/* Tightened throughout: the footer is a reference block, not a reading
+   experience, so it wants density. Line spacing here was set for a wide
+   four-column desktop layout and became very airy once the columns
+   stacked. */
 .footer__top {
   display: grid; grid-template-columns: minmax(0, 1.5fr) repeat(3, minmax(0, 1fr));
-  gap: clamp(2.2rem, 4vw, 4rem);
-  padding-block: clamp(3.5rem, 7vw, 6rem);
+  gap: clamp(1.4rem, 2.6vw, 2.6rem);
+  padding-block: clamp(2.1rem, 4vw, 3.6rem);
 }
 .footer__brand .brand__name { font-size: 1.5rem; }
 .footer__tagline {
-  margin-top: 1.2rem; color: var(--muted-dark); font-size: .84rem;
-  letter-spacing: .05em; max-width: 34ch; line-height: 1.85;
+  margin-top: .7rem; color: var(--muted-dark); font-size: .82rem;
+  letter-spacing: .05em; max-width: 34ch; line-height: 1.6;
 }
 .footer__col h4 {
   font-family: var(--font-sans); font-size: .64rem; font-weight: 600;
   letter-spacing: .26em; text-transform: uppercase; color: var(--champagne);
-  margin-bottom: 1.5rem;
+  margin-bottom: .85rem;
 }
-.footer__col li + li { margin-top: .68rem; }
+.footer__col li + li { margin-top: .4rem; }
 .footer__col a, .footer__col span {
   font-size: .855rem; color: rgba(245,242,236,.68);
   transition: color .35s var(--ease-soft);
 }
 .footer__col a:hover, .footer__col a:focus-visible { color: var(--champagne); }
 .footer__phone {
-  font-family: var(--font-serif); font-size: 1.42rem; color: var(--ivory);
-  display: inline-block; margin-bottom: .4rem;
+  font-family: var(--font-serif); font-size: 1.24rem; color: var(--ivory);
+  display: inline-block; margin-bottom: .2rem;
   transition: color .35s var(--ease-soft);
 }
 .footer__phone:hover { color: var(--champagne); }
 
 .footer__bottom {
   border-top: 1px solid var(--line-dark);
-  padding-block: 1.7rem;
+  padding-block: 1.1rem;
   display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; justify-content: space-between;
   font-size: .7rem; letter-spacing: .12em; color: rgba(245,242,236,.42);
 }
@@ -615,6 +683,17 @@ h1, h2, h3, h4 {
 }
 
 @media (max-width: 720px) {
+  /* The left column of the scrim exists to give the headline a ground while
+     leaving the right of the frame open. On a 375px screen it reached 255px
+     - 68% of everything - and stacked with the vertical gradient, so the
+     photograph disappeared entirely. There is no open right side on a
+     phone, so the column goes and the vertical band does the work alone. */
+  .hero__scrim {
+    background: linear-gradient(to top,
+      rgba(9,9,9,.9) 0%, rgba(9,9,9,.66) 26%,
+      rgba(9,9,9,.3) 52%, rgba(9,9,9,.12) 74%, rgba(9,9,9,.42) 100%);
+  }
+
   .hero__strip { grid-template-columns: repeat(2, 1fr); }
   .hero__strip div:nth-child(2) { border-right: 0; }
   .hero__strip div:nth-child(1), .hero__strip div:nth-child(2) { border-bottom: 1px solid rgba(255,255,255,.13); }

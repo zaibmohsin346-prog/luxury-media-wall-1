@@ -12,7 +12,14 @@
           mask-image: linear-gradient(to right, transparent, #000 9%, #000 91%, transparent);
 }
 .marquee__track { display: flex; width: max-content; animation: marquee 46s linear infinite; }
-.marquee:hover .marquee__track { animation-play-state: paused; }
+
+/* Pause on hover is a pointer affordance. Restricted to devices that
+   genuinely hover: Android Chrome can leave :hover stuck on an element
+   the finger passed over while scrolling, which paused the strip for the
+   rest of the visit with no way for the visitor to release it. */
+@media (hover: hover) and (pointer: fine) {
+  .marquee:hover .marquee__track { animation-play-state: paused; }
+}
 .marquee__group { display: flex; align-items: center; flex: none; }
 .marquee__group span {
   padding-inline: 2.1rem;
@@ -23,17 +30,336 @@
 .marquee__group span::after { content: ""; width: 4px; height: 4px; background: var(--champagne); border-radius: 50%; }
 @keyframes marquee { to { transform: translateX(-50%); } }
 
+/* ==================== SHOWCASE (drifting photo corridor) ================ */
+/* Cards start far behind the page and travel toward the reader, drifting
+   outward to the left or right lane as they come. Two mirrored paths, one
+   per lane; the stagger between cards is set in JS from SHOWCASE_SECONDS.
+
+   Distances are in cqw - percentages of this section's own width - so the
+   whole construction scales with the container rather than the viewport,
+   and the geometry holds identically on a phone and a 27in monitor. */
+.showcase {
+  position: relative; overflow: hidden;
+  container-type: inline-size;
+  background: var(--ink); color: var(--ivory);
+  isolation: isolate;
+  /* Every child is absolutely positioned, so the band has no content to
+     stand it up. Tall enough for a card to arrive, pass and leave. */
+  height: clamp(480px, 66vh, 820px);
+}
+.showcase__stage {
+  position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  perspective: 30cqw; perspective-origin: 50% 52%;
+}
+.showcase__inner { position: absolute; inset: 0; transform-style: preserve-3d; }
+
+.showcase__card {
+  position: absolute; left: 50%; top: 52%;
+  /* Half the width and height are negated in the margins so the card stays
+     centred on its own path; change one and the other three must follow. */
+  width: 38cqw; height: 52cqw; margin-left: -19cqw; margin-top: -26cqw;
+  overflow: hidden; backface-visibility: hidden;
+  border: 1px solid rgba(245, 242, 236, .1);
+  animation-duration: var(--showcase-dur, 22s);
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+.showcase__card img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* Right-hand lane. Sweeps out to the right as it approaches.
+
+   The starting depth matters more than the card size for how large these
+   read. Perspective scale is 30 / (30 - z), so a card starting at -258cqw
+   is drawn at roughly a ninth of its size and stays small for most of the
+   trip. Starting at -132cqw it enters at about a fifth instead, and every
+   photograph spends far longer at a legible size. */
+@keyframes showcaseR {
+  from { transform: translate3d(-11cqw, 0, -132cqw) rotateY(-6deg); }
+  to   { transform: translate3d(44cqw, 0, 14cqw) rotateY(-28deg); }
+}
+/* Left-hand lane: the same path mirrored. */
+@keyframes showcaseL {
+  from { transform: translate3d(11cqw, 0, -132cqw) rotateY(6deg); }
+  to   { transform: translate3d(-44cqw, 0, 14cqw) rotateY(28deg); }
+}
+
+/* With no copy set over the band, the scrim's only job is to feather the
+   top and bottom edges into the ink so cards enter and leave the frame
+   rather than being cut off by a hard border. The centre stays clear. */
+.showcase__scrim {
+  position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background: linear-gradient(to bottom,
+    var(--ink) 0%, rgba(13,13,13,.12) 15%,
+    rgba(13,13,13,.12) 85%, var(--ink) 100%);
+}
+
+/* Because the geometry is expressed in cqw, a 375px container shrinks the
+   whole corridor to match: cards spent most of their life under 40px wide,
+   reading as specks rather than photographs. Phones get a wider card and a
+   shorter corridor, so each picture arrives large enough to recognise. */
+@media (max-width: 720px) {
+  .showcase__card {
+    width: 76cqw; height: 102cqw; margin-left: -38cqw; margin-top: -51cqw;
+  }
+
+  @keyframes showcaseR {
+    from { transform: translate3d(-8cqw, 0, -74cqw) rotateY(-5deg); }
+    to   { transform: translate3d(52cqw, 0, 12cqw) rotateY(-26deg); }
+  }
+  @keyframes showcaseL {
+    from { transform: translate3d(8cqw, 0, -74cqw) rotateY(5deg); }
+    to   { transform: translate3d(-52cqw, 0, 12cqw) rotateY(26deg); }
+  }
+}
+
+/* A corridor of moving photographs is exactly what reduced motion is for.
+   The cards stop where they are and the section reads as a still collage. */
+@media (prefers-reduced-motion: reduce) {
+  .showcase__card { animation: none !important; }
+  .showcase__stage { display: none; }
+}
+
 /* ======================= INTRO / STUDIO STATEMENT ======================= */
 .intro { display: grid; grid-template-columns: minmax(0,.85fr) minmax(0,1.15fr); gap: clamp(2.5rem, 6vw, 6rem); align-items: start; }
-.intro__stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px; background: var(--line); margin-top: 3rem; }
-.intro__stats div { background: var(--ivory); padding: 1.7rem 1.4rem; }
-.intro__stats b {
-  display: block; font-family: var(--font-serif); font-weight: 400; line-height: 1;
-  font-size: clamp(1.9rem, 3.4vw, 2.7rem); color: var(--charcoal);
+
+/* ======================= COVERFLOW (featured work) ====================== */
+/* A 3D coverflow: the centre card faces the reader square-on, its
+   neighbours turn away into the depth on either side.
+
+   Every position is expressed as a `data-pos` value rather than an inline
+   style, so JS only decides WHICH slot a card occupies and the geometry
+   stays here where it can be tuned. Slots: c (centre), r1/r2 to the right,
+   l1/l2 to the left, and everything else parked out of sight. */
+/* Set on the page's own light ground rather than a dark band, so the
+   photographs are the only dark mass in the section and the carousel sits
+   in the same rhythm as the sections either side of it. */
+.coverflow { position: relative; overflow: hidden; background: var(--ivory); isolation: isolate; }
+.coverflow > .shell { position: relative; z-index: 1; }
+.coverflow__eyebrow { color: var(--champagne-dim, #a98c4f); }
+
+.coverflow__stage {
+  position: relative; display: flex; align-items: center; justify-content: center;
+  height: clamp(620px, 88vh, 860px);
+  margin-top: clamp(1.6rem, 3vw, 2.6rem);
+  perspective: 1900px;
 }
-.intro__stats span {
-  display: block; margin-top: .6rem;
-  font-size: .63rem; letter-spacing: .21em; text-transform: uppercase; color: var(--muted);
+
+.coverflow__card {
+  position: absolute; width: min(560px, 90vw); height: clamp(580px, 82vh, 800px);
+  padding: 0; border: 1px solid rgba(23,23,23,.1); background: #171311;
+  overflow: hidden; cursor: pointer; color: inherit; font: inherit; text-align: left;
+  transform-origin: center center;
+  /* The single transition every slot change animates through. */
+  transition: transform .8s cubic-bezier(.25, 1, .5, 1),
+              opacity .8s cubic-bezier(.25, 1, .5, 1),
+              filter .8s cubic-bezier(.25, 1, .5, 1),
+              box-shadow .8s cubic-bezier(.25, 1, .5, 1);
+}
+.coverflow__card img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* --- the five visible slots ------------------------------------------- */
+.coverflow__card[data-pos="c"] {
+  transform: translateX(0) scale(1) rotateY(0deg);
+  opacity: 1; z-index: 30; filter: brightness(1); cursor: default;
+  /* Softer on a light ground - the heavy black glow that read as depth on
+     the dark band would sit on the ivory as a grey smudge. */
+  box-shadow: 0 30px 70px rgba(23,23,23,.28), 0 8px 22px rgba(23,23,23,.12);
+}
+/* Depth is carried by scale, angle and a light desaturation rather than by
+   opacity. Fading a photograph out on a dark ground reads as distance; on
+   this ivory one it just reads as a washed-out grey rectangle, so the side
+   cards stay nearly opaque and recede by going quieter instead. */
+.coverflow__card[data-pos="r1"] { transform: translateX(60%) scale(.84) rotateY(-24deg); opacity: .95; z-index: 20; filter: brightness(.9) saturate(.85); }
+.coverflow__card[data-pos="l1"] { transform: translateX(-60%) scale(.84) rotateY(24deg);  opacity: .95; z-index: 20; filter: brightness(.9) saturate(.85); }
+.coverflow__card[data-pos="r2"] { transform: translateX(112%) scale(.68) rotateY(-38deg); opacity: .78; z-index: 10; filter: brightness(.82) saturate(.7) blur(1px); }
+.coverflow__card[data-pos="l2"] { transform: translateX(-112%) scale(.68) rotateY(38deg); opacity: .78; z-index: 10; filter: brightness(.82) saturate(.7) blur(1px); }
+/* Parked: still in the DOM and still animating in, but out of the way. */
+.coverflow__card[data-pos="off"] { transform: scale(.4); opacity: 0; z-index: 0; pointer-events: none; }
+
+/* --- caption ---------------------------------------------------------- */
+.coverflow__veil {
+  position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background: linear-gradient(180deg, rgba(0,0,0,.42) 0%, rgba(0,0,0,.08) 26%,
+                              rgba(0,0,0,.68) 60%, rgba(0,0,0,.96) 100%);
+}
+.coverflow__num {
+  position: absolute; top: 1.1rem; right: 1.15rem; z-index: 3;
+  font-size: .64rem; font-weight: 600; letter-spacing: .2em; color: rgba(255,255,255,.9);
+}
+.coverflow__num i { font-style: normal; color: var(--champagne); }
+
+/* Only the centre card's caption is shown; the rest would be unreadable at
+   that angle and would fight the photograph. */
+.coverflow__body {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 3;
+  padding: 1.4rem 1.25rem 1.5rem; text-align: center;
+  opacity: 0; transform: translateY(16px);
+  transition: opacity .5s var(--ease) .1s, transform .5s var(--ease) .1s;
+}
+.coverflow__card[data-pos="c"] .coverflow__body { opacity: 1; transform: none; }
+
+/* The card is a real <button>, so its children are spans and every one of
+   them needs an explicit display value or the caption sets as one run-on
+   line of inline text. */
+.coverflow__veil,
+.coverflow__body,
+.coverflow__title,
+.coverflow__rule,
+.coverflow__desc { display: block; }
+.coverflow__num { display: inline-block; }
+
+.coverflow__title {
+  font-family: var(--font-serif); font-size: 1.3rem; line-height: 1.16; color: var(--white);
+  text-shadow: 0 3px 12px rgba(0,0,0,.95);
+}
+.coverflow__rule {
+  width: 34px; height: 2px; background: var(--champagne); margin: .65rem auto .55rem;
+  box-shadow: 0 0 8px rgba(198,166,107,.7);
+}
+.coverflow__desc {
+  font-size: .8rem; line-height: 1.45; color: rgba(255,255,255,.88);
+  max-width: 270px; margin: 0 auto .95rem; text-shadow: 0 2px 8px rgba(0,0,0,.9);
+}
+.coverflow__cta {
+  display: inline-flex; align-items: center; gap: .5rem;
+  padding: .58rem 1.2rem;
+  background: linear-gradient(135deg, var(--champagne) 0%, #a48256 100%);
+  color: #110d0c; font-size: .625rem; font-weight: 700;
+  letter-spacing: .17em; text-transform: uppercase;
+  box-shadow: 0 4px 14px rgba(0,0,0,.4), 0 0 15px rgba(198,166,107,.28);
+}
+.coverflow__cta svg { width: 13px; height: 13px; }
+
+/* --- controls --------------------------------------------------------- */
+.coverflow__controls {
+  display: flex; align-items: center; justify-content: center; gap: 1.15rem;
+  margin-top: clamp(1.4rem, 3vw, 2.2rem);
+}
+.coverflow__arrow {
+  width: 50px; height: 50px; border-radius: 50%; flex: none;
+  background: var(--white); border: 1px solid var(--line); color: var(--charcoal);
+  display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+  box-shadow: 0 4px 14px rgba(23,23,23,.08);
+  transition: border-color .3s var(--ease), color .3s var(--ease), background-color .3s var(--ease);
+}
+.coverflow__arrow svg { width: 19px; height: 19px; }
+.coverflow__arrow:hover { border-color: var(--champagne); color: var(--champagne); }
+
+.coverflow__dots { display: flex; align-items: center; gap: .5rem; }
+.coverflow__dot {
+  height: 8px; width: 8px; border-radius: 9999px; border: 0; padding: 0; cursor: pointer;
+  background: rgba(23,23,23,.2);
+  transition: width .35s var(--ease), background-color .35s var(--ease);
+}
+.coverflow__dot[aria-current="true"] { width: 28px; background: var(--champagne); }
+
+@media (max-width: 720px) {
+  /* A 90vw card leaves a phone no room for neighbours: the first side card
+     was landing 153px over a 338px centre and crowding the caption. The
+     card gives back a little width, the sides push out far enough to read
+     as a peek, and the second tier is dropped - at this width it was three
+     slivers of noise rather than depth. */
+  .coverflow__card { width: 78vw; height: clamp(520px, 74vh, 660px); }
+  .coverflow__card[data-pos="r1"] { transform: translateX(76%) scale(.78) rotateY(-24deg); }
+  .coverflow__card[data-pos="l1"] { transform: translateX(-76%) scale(.78) rotateY(24deg); }
+  .coverflow__card[data-pos="r2"],
+  .coverflow__card[data-pos="l2"] { opacity: 0; pointer-events: none; }
+  .coverflow__stage { height: clamp(560px, 80vh, 700px); }
+}
+
+/* Motion here is decoration, not information: the cards land in place and
+   the arrows still work. */
+@media (prefers-reduced-motion: reduce) {
+  .coverflow__card { transition: none; }
+  .coverflow__body { transition: none; }
+}
+
+/* ================== CFLOW (drag coverflow — services) =================== */
+/* Unlike the featured carousel above, position here is continuous: a drag
+   moves the ring by a fraction of a card and a flick carries. Every card's
+   transform is written by JS each frame, so this file only sets the things
+   that do not change per frame. Card width drives pitch, depth and
+   perspective, so it is the one measured value. */
+.cflow { position: relative; --cflow-card: clamp(230px, 26vw, 360px); }
+
+.cflow__frame {
+  /* The vertical padding keeps the card shadows clear of the overflow clip. */
+  overflow: hidden; padding-block: 2.5rem;
+  cursor: grab; outline: none;
+  perspective: calc(var(--cflow-card) * 3);
+  /* Horizontal drag is ours; the page keeps vertical scrolling. */
+  touch-action: pan-y;
+}
+.cflow__frame:active { cursor: grabbing; }
+.cflow__frame:focus-visible { outline: 2px solid var(--champagne); outline-offset: 4px; }
+
+.cflow__ring {
+  position: relative; transform-style: preserve-3d;
+  height: calc(var(--cflow-card) * 1.25);   /* 4:5 portrait, as the photography is */
+}
+
+.cflow__card {
+  position: absolute; left: 50%; top: 0;
+  width: var(--cflow-card); height: 100%;
+  overflow: hidden; background: var(--ivory-deep);
+  will-change: transform, opacity;
+  box-shadow: 0 18px 44px rgba(23,23,23,.22);
+  border: 1px solid rgba(23,23,23,.08);
+}
+.cflow__card img { width: 100%; height: 100%; object-fit: cover; display: block; user-select: none; }
+/* Materials are close crops rather than whole rooms, so they are painted as
+   a positioned background at the zoom the swatch grid used. */
+.cflow__swatch { display: block; width: 100%; height: 100%; background-repeat: no-repeat; }
+
+.cflow__arrow {
+  position: absolute; top: calc(50% - 3.2rem); transform: translateY(-50%);
+  width: 46px; height: 46px; border-radius: 50%; z-index: 200;
+  background: var(--white); border: 1px solid var(--line); color: var(--charcoal);
+  display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+  box-shadow: 0 4px 14px rgba(23,23,23,.1);
+  transition: border-color .3s var(--ease), color .3s var(--ease);
+}
+.cflow__arrow svg { width: 18px; height: 18px; }
+.cflow__arrow:hover { border-color: var(--champagne); color: var(--champagne); }
+.cflow__arrow--prev { left: 0; }
+.cflow__arrow--next { right: 0; }
+
+.cflow__caption { text-align: center; margin-top: .4rem; min-height: 7.5rem; }
+.cflow__label {
+  display: block; font-size: .6rem; font-weight: 600; letter-spacing: .22em;
+  text-transform: uppercase; color: var(--champagne-dim, #a98c4f);
+}
+.cflow__title {
+  display: block; margin-top: .55rem;
+  font-family: var(--font-serif); font-size: clamp(1.25rem, 2vw, 1.6rem); color: var(--ink);
+}
+.cflow__text {
+  margin: .6rem auto 0; max-width: 46ch;
+  font-size: .88rem; line-height: 1.65; color: var(--muted);
+}
+.cflow__cta {
+  display: inline-flex; align-items: center; gap: .5rem; margin-top: 1rem;
+  font-size: .63rem; font-weight: 600; letter-spacing: .2em; text-transform: uppercase;
+  color: var(--ink); border-bottom: 1px solid var(--line); padding-bottom: .35rem;
+  transition: color .35s var(--ease), border-color .35s var(--ease);
+}
+.cflow__cta svg { width: 13px; height: 13px; }
+.cflow__cta:hover { color: var(--champagne); border-color: var(--champagne); }
+
+.cflow__dots { display: flex; align-items: center; justify-content: center; gap: .45rem; margin-top: 1.4rem; }
+.cflow__dot {
+  width: 8px; height: 8px; border-radius: 9999px; border: 0; padding: 0; cursor: pointer;
+  background: var(--ink); opacity: .22;
+  transition: opacity .3s var(--ease), width .3s var(--ease), background-color .3s var(--ease);
+}
+.cflow__dot[aria-current="true"] { opacity: 1; width: 26px; background: var(--champagne); }
+
+@media (max-width: 720px) {
+  .cflow { --cflow-card: 68vw; }
+  .cflow__arrow { top: auto; bottom: -.4rem; transform: none; }
+  .cflow__arrow--prev { left: .25rem; }
+  .cflow__arrow--next { right: .25rem; }
+  .cflow__caption { min-height: 9.5rem; padding-inline: 3.4rem; }
 }
 
 /* =========================== PROJECT GRID =============================== */
@@ -350,22 +676,25 @@
 .why__item p { margin-top: .5rem; font-size: .89rem; line-height: 1.72; color: var(--muted); }
 
 /* ========================== PROCESS TIMELINE ============================ */
-.process__grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 1px; background: var(--line-dark); }
+/* Set on the light ground. The hairline between cells is the grid's own
+   background showing through a 1px gap, so it moves from the dark rule to
+   the light one along with everything else. */
+.process__grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 1px; background: var(--line); }
 .step {
-  position: relative; background: var(--ink);
+  position: relative; background: var(--white);
   padding: clamp(1.9rem, 3vw, 2.7rem) clamp(1.4rem, 2.2vw, 2.1rem) clamp(2.4rem, 3.6vw, 3.2rem);
   overflow: hidden;
 }
 .step__num {
   font-family: var(--font-serif); font-size: clamp(2.5rem, 4.6vw, 3.6rem); line-height: 1;
-  color: rgba(245,242,236,.16);
+  color: rgba(23,23,23,.16);
   transition: color .7s var(--ease);
 }
 .step:hover .step__num { color: var(--champagne); }
-.step h3 { margin-top: 1.2rem; font-size: clamp(1.1rem, 1.5vw, 1.32rem); color: var(--ivory); }
-.step p { margin-top: .7rem; font-size: .875rem; line-height: 1.72; color: var(--muted-dark); }
+.step h3 { margin-top: 1.2rem; font-size: clamp(1.1rem, 1.5vw, 1.32rem); color: var(--ink); }
+.step p { margin-top: .7rem; font-size: .875rem; line-height: 1.72; color: var(--muted); }
 /* Progress bar drawn as the step scrolls into view */
-.step__bar { position: absolute; left: 0; bottom: 0; height: 2px; width: 100%; background: rgba(255,255,255,.09); }
+.step__bar { position: absolute; left: 0; bottom: 0; height: 2px; width: 100%; background: rgba(23,23,23,.09); }
 .step__bar::after {
   content: ""; position: absolute; inset: 0; background: var(--champagne);
   transform: scaleX(0); transform-origin: left center;
@@ -505,6 +834,55 @@
   color: var(--champagne);
 }
 
+/* ============================== WALL GUIDE ============================== */
+/* Editorial two-column read: a wide photograph of the wall type with the
+   specification notes set beneath it. Deliberately long-form - this is the
+   section that answers "which one do I actually want", so the text is the
+   point and the picture is the evidence. */
+.guide {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  border-top: 1px solid var(--line);
+}
+.guide__item {
+  display: flex; flex-direction: column;
+  border-bottom: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+  background: var(--white);
+}
+/* Every second item sits against the grid edge, so it keeps no right rule. */
+.guide__item:nth-child(2n) { border-right: 0; }
+
+.guide__media { position: relative; overflow: hidden; aspect-ratio: 16 / 10; background: var(--ivory-deep); }
+.guide__media img {
+  width: 100%; height: 100%; object-fit: cover;
+  transform: scale(1.01);
+  transition: transform 1.6s var(--ease);
+}
+.guide__item:hover .guide__media img { transform: scale(1.06); }
+
+.guide__body { padding: clamp(1.6rem, 2.6vw, 2.6rem); display: flex; flex-direction: column; flex: 1; }
+.guide__title {
+  font-family: var(--font-serif); font-size: clamp(1.24rem, 1.75vw, 1.6rem);
+  line-height: 1.2; color: var(--ink);
+}
+.guide__text {
+  margin-top: 1rem; font-size: .93rem; line-height: 1.78; color: var(--muted);
+}
+.guide__cta {
+  display: inline-flex; align-items: center; gap: .55rem; margin-top: auto; padding-top: 1.5rem;
+  font-size: .645rem; font-weight: 600; letter-spacing: .21em; text-transform: uppercase;
+  color: var(--ink); align-self: flex-start;
+  border-bottom: 1px solid var(--line); padding-bottom: .4rem;
+  transition: color .45s var(--ease), border-color .45s var(--ease);
+}
+.guide__cta svg { width: 14px; height: 14px; transition: transform .5s var(--ease); }
+/* Both expanders are phone-only; the desktop column shows every wall type
+   and its full specification with no interaction. */
+.guide__more, .guide__all { display: none; }
+.guide__cta:hover { color: var(--champagne); border-color: var(--champagne); }
+.guide__cta:hover svg { transform: translateX(5px); }
+
 /* ======================= DETAIL GALLERY (MASONRY) ======================= */
 .masonry { columns: 4; column-gap: clamp(.7rem, 1.4vw, 1.15rem); }
 .masonry__item {
@@ -534,7 +912,9 @@
 .masonry__item--sq    { aspect-ratio: 1; }
 
 /* =============================== VIDEO ================================== */
-.video-band { position: relative; overflow: hidden; background: var(--ink); }
+/* The band is light; the video frame inside it stays dark, because the play
+   button, the scrim and the label all sit over footage. */
+.video-band { position: relative; overflow: hidden; background: var(--white); }
 .video-frame { position: relative; aspect-ratio: 16 / 9; background: #0b0b0b; overflow: hidden; }
 .video-frame video { width: 100%; height: 100%; object-fit: cover; }
 .video-frame__scrim {
@@ -565,15 +945,19 @@
   white-space: nowrap;
 }
 
-.video-chapters { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 1px; background: var(--line-dark); margin-top: 1px; }
-.video-chapters div { background: var(--ink); padding: 1.4rem 1.2rem; }
+.video-chapters { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 1px; background: var(--line); margin-top: 1px; }
+.video-chapters div { background: var(--white); padding: 1.4rem 1.2rem; }
 .video-chapters b {
-  display: block; font-size: .6rem; font-weight: 600; letter-spacing: .2em; color: var(--champagne);
+  display: block; font-size: .6rem; font-weight: 600; letter-spacing: .2em;
+  color: var(--champagne-dim, #a98c4f);
 }
-.video-chapters span { display: block; margin-top: .5rem; font-size: .82rem; color: var(--muted-dark); }
+.video-chapters span { display: block; margin-top: .5rem; font-size: .82rem; color: var(--muted); }
 
 /* ============================ TESTIMONIALS ============================== */
 .quotes__grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: clamp(1.2rem, 2.4vw, 2.2rem); }
+
+/* Phone-only control; the desktop grid shows every review at once. */
+.quotes__more { display: none; }
 .quote {
   position: relative; background: var(--white); border: 1px solid var(--line-soft);
   padding: clamp(1.9rem, 3vw, 2.7rem);
@@ -696,6 +1080,14 @@ html:not(.js) .signoff__mark path { stroke-dashoffset: 0; }
 @media (prefers-reduced-motion: reduce) {
   .signoff__mark path { stroke-dashoffset: 0; }
   .js .signoff__mark.is-visible path { animation: none; }
+
+  /* The global reduced-motion rule collapses every animation to .001ms and
+     one iteration. For the marquee that meant it snapped to its end frame
+     (translateX(-50%)) and froze there, leaving the strip parked mid-word.
+     Stop it at the start instead, so it reads as a deliberate static row -
+     which is what someone asking for reduced motion should get. */
+  .marquee__track { animation: none !important; transform: none !important; }
+  .marquee { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 }
 
 /* ================================ SHARE ================================= */
@@ -734,6 +1126,23 @@ html:not(.js) .signoff__mark path { stroke-dashoffset: 0; }
   .svc__grid      { grid-template-columns: repeat(2, minmax(0,1fr)); }
   .ba__grid       { grid-template-columns: repeat(2, minmax(0,1fr)); }
   .quotes__grid   { grid-template-columns: 1fr; }
+
+  /* Two reviews, then the rest on request. Three cost 1,384px for copy a
+     visitor skims; the button is right there for anyone who wants more. */
+  .quotes__grid:not(.is-expanded) .quote:nth-child(n + 3) { display: none; }
+
+  /* Four claims, each a row of its own, ran the section past 1,200px.
+     Tighter padding and a smaller measure keep all four without the bulk. */
+  .why__item { gap: 1rem; padding-block: 1.05rem; }
+  .why__item h3 { font-size: 1rem; }
+  .why__item p { margin-top: .35rem; font-size: .84rem; line-height: 1.6; }
+  .quotes__more {
+    display: block; margin: 1.6rem auto 0; padding: .95rem 1.6rem;
+    font-family: inherit; font-size: .645rem; font-weight: 600;
+    letter-spacing: .21em; text-transform: uppercase;
+    color: var(--ink); background: none; border: 1px solid var(--line);
+    cursor: pointer;
+  }
   .process__grid  { grid-template-columns: repeat(2, minmax(0,1fr)); }
   .materials__grid { grid-template-columns: repeat(4, minmax(0,1fr)); }
   .masonry { columns: 3; }
@@ -750,13 +1159,109 @@ html:not(.js) .signoff__mark path { stroke-dashoffset: 0; }
 }
 
 @media (max-width: 720px) {
+  /* ---------------------------------------------------------------------
+     VERTICAL RHYTHM ON PHONES
+     The section padding is clamp(5rem, 11vw, 10.5rem). On a 375px screen
+     11vw is only 41px, so the clamp sits permanently on its 5rem floor -
+     a value chosen for desktop. That put 160px of empty space between
+     every one of 13 sections, roughly a fifth of a screen each time, and
+     it read as the page having stopped.
+     --------------------------------------------------------------------- */
+  :root { --section-y: 2.1rem; }
+  .section--tight { padding-block: 1.8rem; }
+  .section-head { margin-bottom: 1.5rem; }
+  .mt-14 { margin-top: 2.25rem; }
+  .mt-10 { margin-top: 1.75rem; }
+  .mb-10 { margin-bottom: 1.6rem; }
+
   .projects__grid { grid-template-columns: 1fr; }
   .svc__grid      { grid-template-columns: 1fr; }
   .ba__grid       { grid-template-columns: 1fr; }
-  .process__grid  { grid-template-columns: 1fr; }
+  /* Six steps in a single column ran 1,744px for six short paragraphs.
+     Two-across halves that; the copy is brief enough to take the narrower
+     measure without becoming a column of single words. */
+  .process__grid  { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .step { padding: 1.35rem 1rem 1.9rem; }
+  .step__num { font-size: 2.1rem; }
+  .step h3 { margin-top: .8rem; font-size: 1rem; }
+  .step p { margin-top: .5rem; font-size: .81rem; line-height: 1.6; }
   .materials__grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
-  .masonry { columns: 2; }
-  .intro__stats { grid-template-columns: 1fr; }
+  .masonry { columns: 1; }
+
+  /* One wall type at a time; the right-hand rule would otherwise cut the
+     single column in half. */
+  .guide { grid-template-columns: 1fr; }
+  .guide__item { border-right: 0; }
+  .guide__media { aspect-ratio: 4 / 3; }
+  .guide__text { font-size: .9rem; line-height: 1.72; }
+
+  /* Eight full specifications stacked in one column ran to 1,300px each -
+     a third of the whole page. The notes stay, but folded: four lines as a
+     taster, the rest one tap away. Everything is still in the markup, so
+     search engines and screen readers see the complete text either way. */
+  .guide__item:not(.is-open) .guide__text {
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4;
+    overflow: hidden;
+  }
+  .guide__more {
+    display: inline-flex; align-items: center; gap: .4rem; margin-top: .7rem;
+    font-size: .645rem; font-weight: 600; letter-spacing: .19em; text-transform: uppercase;
+    color: var(--champagne-dim, #a98c4f); background: none; border: 0; padding: 0;
+    font-family: inherit; cursor: pointer; align-self: flex-start;
+  }
+  .guide__more::after { content: "+"; font-size: .95rem; line-height: 1; }
+  .guide__item.is-open .guide__more::after { content: "\2212"; }   /* minus */
+  .guide__cta { padding-top: 1.15rem; }
+
+  /* Three of eight until asked. */
+  .guide:not(.is-expanded) .guide__item:nth-child(n + 4) { display: none; }
+  .guide__all {
+    display: block; margin: 1.5rem auto 0; padding: .95rem 1.6rem;
+    font-family: inherit; font-size: .645rem; font-weight: 600;
+    letter-spacing: .21em; text-transform: uppercase;
+    color: var(--ink); background: none; border: 1px solid var(--line);
+    cursor: pointer;
+  }
+
+  /* ---------------------------------------------------------------------
+     PHONES: LET THE PHOTOGRAPHY BREATHE
+     On a desktop grid a card is one of three and the caption block is a
+     small part of it. On a 375px phone that same block ate roughly half
+     the picture, so the work itself read as a thumbnail.
+
+     Below, the card keeps only what identifies the project - number, title
+     and the tap cue. The description and the material tags are already on
+     the detail screen one tap away, so they are dropped here rather than
+     duplicated over the photograph.
+     --------------------------------------------------------------------- */
+  .project-card__media { aspect-ratio: 3 / 4; }        /* taller frame = bigger photo */
+  .project-card__veil {
+    /* Darkens only the caption band; the wall itself stays uncovered. */
+    background: linear-gradient(to top,
+      rgba(11,11,11,.90) 0%, rgba(11,11,11,.55) 26%,
+      rgba(11,11,11,.10) 52%, rgba(11,11,11,0) 70%);
+    opacity: 1;
+  }
+  .project-card__desc,
+  .project-card .tags { display: none; }
+  .project-card__body { padding: 1.15rem 1.1rem 1.15rem; }
+  .project-card__title { font-size: 1.24rem; }
+  .project-card__line { margin-top: .7rem; }
+  .project-card__cta { margin-top: .85rem; }
+
+  /* Section intros carry the same words as desktop but at a size that does
+     not push the first photograph below the fold. */
+  .lede { font-size: .93rem; line-height: 1.6; }
+  .lede--detail { display: none; }
+  .section-head__aside { margin-top: .9rem; }
+
+  /* Service cards: the photograph is the selling point, so the supporting
+     paragraph is capped at three lines rather than running to six. */
+  .svc-card__body p {
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3;
+    overflow: hidden;
+  }
+  .masonry__item::after { font-size: .62rem; }
   .form { grid-template-columns: 1fr; }
   .cfg__swatches { grid-template-columns: repeat(3, 1fr); }
   .cfg__stage { aspect-ratio: 4 / 3; }
